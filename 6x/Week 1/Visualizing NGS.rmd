@@ -5,6 +5,11 @@ date: "April 14, 2016"
 output: html_document
 ---
 
+```{r}
+library(BiocInstaller)
+biocLite("ERBS")
+```
+
 Book page: [Visualizung NGS data](http://genomicsclass.github.io/book/pages/bioc2_vizNGS.html)
 
 We recall the HepG2 GRanges from the ERBS package, which provides very limited information in the narrowPeak format on the locations and sizes of ESRRA binding to DNA from a liver cell line.
