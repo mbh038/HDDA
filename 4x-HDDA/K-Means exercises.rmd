@@ -1,0 +1,53 @@
+---
+title: "PH525 4x HDDA: K-Means exercises"
+author: "Michael Hunt"
+date: "April 2, 2016"
+output: html_document
+---
+
+## Example
+
+```{r}
+library(tissuesGeneExpression)
+data(tissuesGeneExpression)
+```
+
+```{r}
+centers<-length(unique(tissue)) # how many clusters to choose
+km<-kmeans(t(e),centers=centers)
+table(tissue,clusters=km$cluster)
+```
+
+To visualise, use mulitdimensional scaling (mds)
+
+```{r}
+d<-dist(t(e))
+mds<-cmdscale(d)
+plot(mds[,1],mds[,2],col=km$cluster)
+```
+
+## K-means Exercises #1
+
+Run kmeans with 4 centers for the blood RNA data:
+
+```{r}
+library(GSE5859Subset)
+data(GSE5859Subset)
+```
+
+```{r}
+library(rafalib)
+set.seed(10)
+km<-kmeans(t(geneExpression),centers=5)
+
+mds=cmdscale(dist(t(geneExpression)))
+mypar(1,1)
+plot(mds,bg=km$cluster,pch=21)
+table(sampleInfo$group,km$cluster)
+table(sampleInfo$date,km$cluster)
+##looks better if we re-order:
+table(sampleInfo$date,km$cluster)[,c(4,1,5,3,2)]
+```
+
+See that date is driving the clusters
+

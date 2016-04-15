@@ -1,0 +1,177 @@
+---
+title: "PH525 4x HDDA: MDS exercises"
+author: "Michael Hunt"
+date: "April 1, 2016"
+output: html_document
+---
+
+```{r}
+library(tissuesGeneExpression)
+data(tissuesGeneExpression)
+```
+
+In these exercise we will demonstrate the relantionship between the SVD and the output of mdscale, the function in R that performs MDS.
+
+Using the `z` we computed in SVD Exercises #4:
+
+```{r}
+y = e - rowMeans(e)
+s = svd(y)
+z = s$d * t(s$v)
+```
+we can make an mds plot
+
+```{r}
+library(rafalib)
+ftissue = factor(tissue)
+mypar(1,1)
+plot(z[1,],z[2,],col=as.numeric(ftissue))
+legend("topleft",levels(ftissue),col=seq_along(ftissue),pch=1)
+```
+Now run the function cmdscale on the original data
+
+```{r}
+d = dist(t(e))
+mds = cmdscale(d)
+```
+
+### MDS Exercises #1     
+What is the correlation between the first row of z and the first column in mds?
+
+```{r}
+cor(z[1,],mds[,1]) # Ans= 1 (-1)
+```
+### MDS Exercises #2  
+What is the correlation between the second row of z and the second column of mds?
+
+```{r}
+cor(z[2,],mds[,2]) # Ans= 1 (-1)
+```
+### MDS Exercises #3  
+Note that the mds plot is not the same:
+
+```{r}
+library(rafalib)
+ftissue = factor(tissue)
+mypar(1,2)
+plot(z[1,],z[2,],col=as.numeric(ftissue))
+legend("topleft",levels(ftissue),col=seq_along(ftissue),pch=1)
+plot(mds[,1],mds[,2],col=as.numeric(ftissue))
+```
+
+Ans: multiply z[1,] and z[2,] by -1 
+(But we didn't - something wrong here in Q1-3)
+
+### MDS Exercises #4
+### MDS Exercises #5
+
+```{r}
+library(GSE5859Subset)
+data(GSE5859Subset)
+```  
+Compute the `svd` and compute `z`
+
+```{r}
+s = svd(geneExpression-rowMeans(geneExpression))
+z = s$d * t(s$v)
+```
+Which dimension of z most correlates with the outcome `sampleInfo$group`?
+
+```{r}
+ks = 1:nrow(z)
+
+dimcors = sapply(ks,function(k){
+    cor(z[k,],sampleInfo$group) 
+})
+
+plot(ks,dimcors) ##take a look
+which.max( dimcors[] )
+```
+
+```{r}
+which.max(cor(sampleInfo$g,t(z))) # model answer
+```
+### MDS Exercises #5 What is the maximum correlation?
+
+```{r}
+dimcors[which.max( dimcors[] )]
+```
+
+```{r}
+max(cor(sampleInfo$g,t(z))) # model answer
+```
+
+### MDS Exercises #6  
+
+Load the following dataset
+
+```{r}
+library(GSE5859Subset)
+data(GSE5859Subset)
+```
+
+Compute the svd and compute z
+
+```{r}
+s = svd(geneExpression-rowMeans(geneExpression))
+z = s$d * t(s$v)
+```
+
+Which dimension of z has the second highest correlates with the outcome sampleInfo$group?
+
+```{r}
+which.max(cor(sampleInfo$g,t(z))[-1]) + 1
+```
+We add 1 because we took out the first.
+
+### MDS Exercises #7
+
+Note these measurements were made during two months:
+
+```{r}
+sampleInfo$date
+```
+
+We can extract the month this way:
+
+```{r}
+month = format( sampleInfo$date, "%m")
+month = factor( month)
+```
+
+Which dimension of z has the highest correlates with the outcome `month`?
+
+```{r}
+which.max(cor(as.numeric(month),t(z)))
+max(cor(as.numeric(month),t(z)))
+```
+Note that the same dimension is correlated with both the group and the date. Not also that these are correlated:
+
+```{r}
+table(sampleInfo$g,month)
+```
+So is this first dimension related directly to group or is it related only through the month? Note that the correlation with month is higher. This is related to batch effects which we will learn about later.
+
+### MDS Exercises #8
+
+In MDS Exercises #7 we saw that that one of the dimensions was highly correlated to the `sampleInfo$group`. Now take the 5th column of $U$ and stratify by the gene chromosome. Remove chrUn and make a boxplot of the values of $U_6$ stratified by chromosome.
+
+...5th column of u
+```{r}
+df<-data.frame(geneAnnotation$CHR,s$u[,6])
+names(df)<-c("chr","ge")
+df<-df[!df$chr == "chrUn", ]
+boxplot(ge~chr,data=df)
+```
+chrY looks different from the others.
+
+model answer:
+
+```{r}
+result = split(s$u[,6],geneAnnotation$CHR)
+result = result[ which(names(result)!="chrUn") ]
+boxplot(result,range=0)
+boxplot(result,range=0,ylim=c(-0.025,0.025))
+medians = sapply(result,median)
+names(result)[ which.max(abs(medians)) ]
+```

@@ -1,0 +1,55 @@
+---
+title: "Import/Export"
+author: "Michael Hunt"
+date: "April 11, 2016"
+output: html_document
+---
+
+### miRNA target sites: pre-GRanges
+
+Bioconductor's `rtracklayer` package supports import and export of files in common genomic data formats. The package includes a demonstration dataset of microRNA target sites.
+
+```{r}
+library(rtracklayer,message=FALSE)
+data(targets)
+```
+What is the class of targets?
+
+```{r}
+class(targets)
+```
+
+### Checking essential metadata
+
+To what reference build do the chromosome, start, and end values in targets refer?
+
+ hg18  
+ hg19  
+ see the manual page  
+ it cannot be determined without forensic work - correct 
+ 
+Answer:  Unfortunately it is not typical to add metadata to data.frame instances, as one has to fill a column with relevant information.
+
+### GRanges to bed
+
+We can create a GRanges instance from the targets data frame as follows
+
+```{r}
+library(GenomicRanges)
+mtar = with(targets,
+    GRanges(chrom, IRanges(start,end), strand=strand,
+  targets=target, mirname=name))
+```
+You can glimpse of exported versions of this data with
+
+```{r}
+cat(export(mtar[1:5], format="bed"), sep="\n")
+cat("\n")
+cat(export(mtar[1:5], format="gff3"), sep="\n")
+```
+How can metadata about the data origin and reference build be encoded in the bed export?
+
+Answer:  
+use a descriptive filename  
+See the specifications for bed and other formats at [UCSC](https://genome.ucsc.edu/FAQ/FAQformat.html)
+

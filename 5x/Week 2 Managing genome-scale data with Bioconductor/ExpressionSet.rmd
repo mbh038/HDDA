@@ -1,0 +1,87 @@
+---
+title: "ExpressionSet"
+author: "Michael Hunt"
+date: "April 9, 2016"
+output: html_document
+---
+
+### Book chapter sections: 
+
+[Metadata management: Management of genome-scale data: Object-oriented solutions/metadata annotation](http://genomicsclass.github.io//book/pages/bioc1_mgt_gsd.html#metadata)  
+
+[Object class design:  Management of genome-scale data: Object-oriented solutions/OOP](http://genomicsclass.github.io//book/pages/bioc1_mgt_gsd.html#OOP)
+
+### Unique feature names, multiple probes per gene
+
+Create an ExpressionSet from the NKI data in genefu:
+
+```{r}
+library(Biobase)
+library(genefu)
+data(nkis)
+nkiES = ExpressionSet(t(data.nkis), phenoData=AnnotatedDataFrame(demo.nkis),
+   featureData=AnnotatedDataFrame(annot.nkis))
+nkiES
+```
+The feature names are unique
+
+```{r}
+sum(duplicated(featureNames(nkiES)))
+```
+
+How many of the ENTREZ identifiers present in this dataset are associated with multiple features? (Check names(fData(nkiES)) for relevant field name.)
+
+```{r}
+sum(table(fData(nkiES)$EntrezGene.ID)>1)
+```
+
+### Per-gene descriptive statistics
+
+Use the ExpressionSet from the last problem.
+
+Which feature is least variable across samples? Use median absolute deviation as a robust measure of variation.
+
+```{r}
+library(matrixStats)
+rms<-rowMads(t(data.nkis))
+colnames(data.nkis)[which.min(rms)]
+# model answer
+which.min(apply(exprs(nkiES),1,mad))
+```
+
+### Missing values; sensitivity of statistics to imputation
+
+You can show that there are missing values in the expression data using
+
+```{r}
+mean(is.na(exprs(nkiES)))
+```
+
+A very simple way of imputing missing data is provided in the impute package. This should only be used with utmost care. When missing values occur it is absolutely essential to understand why they are present. It is important to assess potential systematic causes for missingness, that, if present, would militate against adoption of a simple statistical remedy.
+
+Install and attach this package and generate a matrix with missing values "filled in", after reading the man page for `impute.knn`.
+
+
+```{r}
+library(BiocInstaller)
+biocLite("impute")
+```
+
+```{r}
+library(impute)
+ied = impute.knn(exprs(nkiES))
+mean(is.na(ied$data))
+```
+We see that all NAs have been removed.
+
+After this imputation, which feature is identified, using median absolute deviation, as least variable over samples?
+
+```{r}
+which.min(apply(ied$data,1,mad))
+```
+### Updating an ExpressionSet   
+
+Why does `exprs(nkiES)` = ied fail?
+
+Answer:  
+ied is actually a list and must be subset further - must use ied$data

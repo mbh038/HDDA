@@ -1,0 +1,213 @@
+---
+title: "KNN and Cross-validation"
+author: "Michael Hunt"
+date: "April 3, 2016"
+output: html_document
+---
+
+Libraries:
+
+```{r}
+library(class)
+library(caret)
+library(rafalib)
+library (openintro)
+data(COL)
+```
+
+Load the data
+
+```{r}
+library(GSE5859Subset)
+data(GSE5859Subset)
+```
+And define the outcome and predictors. To make the problem more difficult we will only consider autosomal genes:
+
+```{r}
+y = factor(sampleInfo$group)
+X = t(geneExpression)
+out = which(geneAnnotation$CHR%in%c("chrX","chrY"))
+X = X[,-out]
+```
+### kNN and Cross Validation Exercises #1
+
+Set the seed to 1 `set.seed(1)` then use the `createFolds` function in the `caret` package to create 10 folds of y.
+
+What is the 2nd entry in the fold 3?
+
+```{r}
+set.seed(1)
+idx <- createFolds(y, k=10) # returns folds as list of numeric indices
+sapply(idx, length) # tells us how many elements of y are in each fold
+str(idx) # shows us which elements of y are in which fold
+idx[[3]][2] # gives us index of second element of 3rd fold
+sapply(idx,function(ind) table(y[ind])) # tells us elements of y folds - justs 1s and 0s
+```
+### kNN and Cross Validation Exercises #2
+
+For the following questions we are going to use kNN. We are going to consider a smaller set of predictors by _filtering_ genes using t-tests. Specifically, we will perform a t-test and select the $m$ genes with the smallest p-values.
+
+Let $m=8$ and $k=5$ and train kNN by leaving out the second fold `idx[[2]]`
+
+
+```{r}
+library(class)
+library(genefilter)
+m=8
+k=5
+ind = idx[[2]] # fold to be left out
+pvals<-colttests(X[-ind,],factor(y[-ind]))$p.val # do ttests only on train set
+ind2<-order(pvals)[1:m]
+predict<-knn(train=X[-ind,ind2],test=X[ind,ind2],cl=y[-ind],k=k)
+
+table(true=y[ idx[[2]] ], predict)
+sum(predict!=y[ind])
+```
+Answer: 1
+
+### kNN and Cross Validation Exercises #3
+
+Now run the code for kNN and Cross Validation Exercises #2 for all 10 folds and keep track of the errors. What is our error rate (number of errors divided by number of predictions) ?
+
+```{r}
+set.seed(1)
+m=8
+ks <- 1:10
+res <- sapply(ks, function(k) {
+  ##try out each version of k from 1 to 10
+  res.k <- sapply(seq_along(idx), function(i) {
+    ##loop over each of the 10 cross-validation folds
+    ##predict the held-out samples using k nearest neighbors
+    ind=idx[[i]]
+    pvals<-colttests(X[-ind,],factor(y[-ind]))$p.val # do ttests only on train set
+    ind2<-order(pvals)[1:m]
+    predict<-knn(train=X[-ind,ind2],test=X[ind,ind2],cl=y[-ind],k=k)
+    ##the ratio of misclassified samples
+    sum(predict!=y[ind])
+  })
+  ##average over the 10 folds
+  sum(res.k)/length(y)
+})
+res
+```
+### kNN and Cross Validation Exercises #4
+
+Now we are going to select the best values of k and m. Use the expand grid function to try out the following values:
+
+```{r}
+ms=2^c(1:11)
+ks=seq(1,9,2)
+params = expand.grid(k=ks,m=ms)
+```
+Now use apply or a loop to obtain error rates for each of these pairs of parameters. Which pair of parameters minimizes the error rate?
+
+```{r}
+set.seed(1)
+ms=2^c(1:11)
+tres<-sapply(ms,function(m) {
+    ks=seq(1,9,2)
+    res <- sapply(ks, function(k) {
+      res.k <- sapply(seq_along(idx), function(i) {
+        ind=idx[[i]]
+        pvals<-colttests(X[-ind,],factor(y[-ind]))$p.val # do ttests only on train set
+        ind2<-order(pvals)[1:m]
+        predict<-knn(train=X[-ind,ind2],test=X[ind,ind2],cl=y[-ind],k=k)
+        sum(predict!=y[ind])
+      })
+      sum(res.k)/length(y)
+    })
+    res
+})
+rownames(tres)<-ks
+colnames(tres)<-ms
+tres
+min(tres)
+which(tres == min(tres), arr.ind = TRUE)
+```
+Answer: k=3, m=1024
+
+__Model Answer:__
+
+```{r}
+errors = apply(params,1,function(param){
+  k =  param[1]
+  m =  param[2]
+  result = sapply(idx,function(ind){
+    pvals = rowttests(t(X[-ind,]),factor(y[-ind]))$p.val
+    ind2 = order(pvals)[1:m]
+    predict=knn(X[-ind,ind2],X[ind,ind2],y[-ind],k=k)
+    sum(predict!=y[ind])
+  })
+  sum(result)/length(y)
+  })
+params[which.min(errors),]
+##make a plot and confirm its just one min:
+errors = matrix(errors,5,11)
+library(rafalib)
+mypar(1,1)
+matplot(ms,t(errors),type="l",log="x")
+legend("topright",as.character(ks),lty=seq_along(ks),col=seq_along(ks))
+```
+
+### kNN and Cross Validation Exercises #5
+
+Repeat question kNN and Cross Validation Exercises #4 but now perform the t-test filtering before the cross validation. Note how this biases the entire result and gives us much lower estimated error rates.
+
+What is the minimum error rate?
+
+```{r}
+pvals = rowttests(t(X),factor(y))$p.val
+errors = apply(params,1,function(param){
+  k =  param[1]
+  m =  param[2]
+  result = sapply(idx,function(ind){
+    ind2 = order(pvals)[1:m]
+    predict=knn(X[-ind,ind2],X[ind,ind2],y[-ind],k=k)
+    sum(predict!=y[ind])
+  })
+  sum(result)/length(y)
+  })
+params[which.min(errors),]
+##make a plot and confirm its just one min:
+errors = matrix(errors,5,11)
+min(errors)
+library(rafalib)
+#mypar(1,1)
+matplot(ms,t(errors),type="l",log="x")
+legend("topright",as.character(ks),lty=seq_along(ks),col=seq_along(ks))
+```
+  
+Answer: 0.08333  
+Note how this biases the entire result and gives us much lower estimated error rates. The filtering must be applied without the test set data.  
+
+### kNN and Cross Validation Exercises #6
+
+Repeat the cross-validation we performed in question kNN and Cross Validation Exercises #4 but now instead of defining y as `sampleInfo$group` use:
+
+```{r}
+y = factor(as.numeric(format( sampleInfo$date, "%m")=="06"))
+```
+```{r}
+errors = apply(params,1,function(param){
+  k =  param[1]
+  m =  param[2]
+  result = sapply(idx,function(ind){
+    pvals = rowttests(t(X[-ind,]),factor(y[-ind]))$p.val
+    ind2 = order(pvals)[1:m]
+    predict=knn(X[-ind,ind2],X[ind,ind2],y[-ind],k=k)
+    sum(predict!=y[ind])
+  })
+  sum(result)/length(y)
+  })
+params[which.min(errors),]
+##make a plot and confirm its just one min:
+errors = matrix(errors,5,11)
+library(rafalib)
+mypar(1,1)
+matplot(ms,t(errors),type="l",log="x")
+legend("topright",as.character(ks),lty=seq_along(ks),col=seq_along(ks))
+```
+  
+Answer: 0
+
+Note that we achieve much lower error rate when predicting date than when predicting the group. Because group is confounded with date, it is very possible that these predictors have no information about group and that our lower 0.5 error rates are due to the confounding with date. We will learn more about this in the batch effects section.

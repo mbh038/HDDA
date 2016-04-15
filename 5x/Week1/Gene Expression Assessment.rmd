@@ -1,0 +1,89 @@
+---
+title: "Gene Expression Assessment"
+author: "Michael Hunt"
+date: "April 6, 2016"
+output: html_document
+---
+
+We have shown how Bioconductor provides resources for studying the human genome sequence as well as SNPs. Bioconductor also provides resources that permit us to obtain information about genes. We will see how these databases can be quite complex. But before learning about these here we present some experimental data. 
+
+The driving force behind the formation of the Bioconductor project was the emergence of high throughput measurement of gene expression data. Unlike genome sequence and SNP data, gene expression data varies from cell to cell, from tissue to tissue and from individual to individual. Statistical techniques such as those implemented in R were natural tools to parse out variability and perform statistical inference. Furthermore, the ambitious use of newly invented technologies added  issues of measurement error and bias to an already difficulty challenge.
+
+Note that in the previous assessments we focused on static database information: genome sequence and SNPs. In previous courses we have seen the `tissuesGeneExpression` data which is experimental data measured with microarrays. If you have not installed it you can do it like this:
+
+```{r}
+library(devtools)
+install_github("genomicsclass/tissuesGeneExpression")
+```
+You can load the data:
+
+```{r}
+library(tissuesGeneExpression)
+data(tissuesGeneExpression)
+head(e[,1:5])
+table(tissue)
+```
+
+The rows of the matrix e are the features, in this case representing genes, and the columns are the samples. The entries of the matrix are gene expression measurements (in log scale) obtained using a microarray technology. 
+
+### Localization of expression to tissues
+
+Look at the data for the feature with ID "209169_at". You can index the rows of 'e' directly with this character string.
+
+Which of the following best describes the data? (Hint: stratify data by tissue and create boxplots)
+
+```{r}
+boxplot(e["209169_at",]~tissue,las=2) # las=2 sets the axis label perpendicular
+```
+
+Answer:  
+This gene is expressed in the brain but not the other tissues  
+ 
+### Comparing genes for tissue-specificity
+
+Below is a vector of 6 IDs which index features of 'e':
+
+```{r}
+IDs = c("201884_at", "209169_at", "206269_at", "207437_at", "219832_s_at", "212827_at")
+```
+
+Which of the following ID(s) appear to represent a gene specific to placenta? Be careful when you are picking, to pick the correct name or names. Names often look similar. Also, if you get your guess wrong, you need to uncheck the ones you think are wrong to guess again.
+
+```{r}
+library(rafalib)
+mypar(3,2)
+sapply(IDs,function(x){boxplot(e[x,]~tissue,las=2,main=x)})
+```
+### Discovery of microarray annotation in Bioconductor
+
+Note that there is much existing work on gene function and all we have here are identifiers provided by the manufacturer of the machine that makes the measurements. How would we go about finding more information about gene "206269_at" for example? Does it have a known function? Where is it on the genome? What is its sequence? One of the strengths of Bioconductor is that it connects R, an existing comprehensive toolbox for data analysis, with the existing comprehensive databases annotating the genome. We will learn about these powerful resources in this class.
+
+The microarray product used to make the measurements described here is the Affymetirx Human GeneChip HG133A. Search the Bioconductor website and determine which of the following packages provides a connection to gene information:
+
+Answer:  
+hgu133a.db   
+
+### Oligo sequences on affymetrix arrays
+
+The affymetrix technology for mRNA abundance measurement is based on hybridization of highly processed biological sample material to synthetic oligonucleotide "probes" that are on fixed positions of the microarray surface. Bioconductor provides detailed information on the probe and array structure as published by affymetrix.
+
+Install and attach the `hgu133aprobe` package.
+
+```{r}
+library(BiocInstaller)
+biocLite("hgu133aprobe")
+```
+```{r}
+library(hgu133aprobe)
+head(hgu133aprobe)
+```
+
+The field "sequence" gives 25 base-pair sequences of oligonucleotides that are in the 3' UTR region of the gene associated with the array "probe set".
+
+You will learn how to use this information to check for accuracy of annotation, to assess risk of cross-hybridization, etc. This table is essentially a large data.frame.
+
+How many oligos are used to interrogate samples for gene GCM1, annotated to probe 206269_at? You will need to work with the Probe.Set.Name field of the hgu133aprobe data.frame.
+
+```{r}
+sum(hgu133aprobe$Probe.Set.Name=="206269_at")
+```

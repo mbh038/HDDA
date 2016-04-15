@@ -1,0 +1,36 @@
+---
+title: "AnnotationHub"
+author: "Michael Hunt"
+date: "April 11, 2016"
+output: html_document
+---
+
+```{r}
+library(AnnotationHub)
+ah=AnnotationHub()
+ah
+```
+
+```{r}
+query(ah,"HepG2")
+```
+
+### Hub exploration via query()
+
+Use the commands
+
+```{r}
+library(AnnotationHub)
+ah = AnnotationHub() # AnnotationHub with 36170 records
+mah = mcols(ah) # DataFrame with 36170 rows and 10 columns
+names(mah) # "species is one of the names"
+sort(table(mah$species), decreasing=TRUE)[1:10]
+```
+We can see the number of entries devoted to H. sapiens and other species. Queries about the content of the hub can be nested. Use
+
+```{r}
+names(query(query(ah, "HepG2"), "CTCF"))
+```
+to find names of files that address binding of CTCF (a transcription factor involved in chromatin structure regulation) to DNA from HepG2 cells.
+
+How many entries address CTCF binding in HepG2?:

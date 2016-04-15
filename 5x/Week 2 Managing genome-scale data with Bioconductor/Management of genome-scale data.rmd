@@ -1,0 +1,40 @@
+---
+title: "Management of genome-scale data"
+author: "Michael Hunt"
+date: "April 8, 2016"
+output: html_document
+---
+
+[Book chapter: Management of genome-scale data: Object-oriented solutions/Multiple BAM files](http://genomicsclass.github.io//book/pages/bioc1_mgt_gsd.html#multibam)  
+
+[Book chapter introducing SummarizedExperiment](http://genomicsclass.github.io//book/pages/bioc1_summex.html)  
+
+## Illustrative exercises
+
+### 1.0 Distinct components from an experiment.
+
+```{r}
+library(GSE5859Subset)
+library(Biobase)
+.oldls = ls()
+data(GSE5859Subset)
+.newls = ls()
+```
+The objects obtained from the data() command are
+
+```{r new}
+newstuff = setdiff(.newls, .oldls)
+newstuff
+```
+and they have classes
+
+```{r classes}
+cls = lapply(newstuff, function(x) class(get(x)))
+names(cls) = newstuff
+cls
+```
+It is easy to make an informative plot of hybridization date by ethnicity of sample source using standard R:
+
+```{r box plot}
+boxplot(date~factor(ethnicity), data=sampleInfo, ylab="chip date")
+```

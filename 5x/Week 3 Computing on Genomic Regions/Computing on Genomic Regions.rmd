@@ -1,0 +1,600 @@
+---
+title: "Computing on Genomic Regions"
+author: "Michael Hunt"
+date: "April 9, 2016"
+output: html_document
+---
+
+The question that we address in this component is very precise and can be answered with one experimental paradigm.  Given genomic DNA extracted from human liver cells (in this case, the widely used cell lines HepG2 and GM12878), where on the genome does the nuclear protein known as ESRRA (estrogen related receptor alpha) bind?  We motivate this by describing an important publication that furthered our understanding of the role of estrogen receptors in breast cancer.
+
+The data we examine this week comes from the analysis of ChIP-seq experiments.  We will learn more about how to process raw experimental datathese  in the week of this course and our short two week courses.  At present we will work with results of a ChIP-seq experiment performed in the ENCODE project.  We will see how to import information for files in the "narrowPeak" format, will examine the results in the form of a Bioconductor GRanges object, and will illustrate how to identify, for each binding peak, the nearest transcriptional start site (as recorded for UCSC defined genes).  This enables us to assess whether regulatory activity of ESRRA occurs in regions conventionally regarded as transcriptional promoter regions.
+
+This week we are using two sets of genomic regions as examples. These are the reported Estrogen Related Receptor binding sites obtained for a ENCODE ChIP-seq experiment on two cell lines: HepG2 and GM12787. We have put these regions into an R package for your convenience. If you have not done so already, please download and install the package:
+
+```{r}
+library(devtools)
+install_github("genomicsclass/ERBS")
+```
+
+### Setup/version check
+
+Before we get started we want to ensure that you have the latest version of Bioconductor installed, since obtaining the correct answers to these questions depends on this. Load the library.
+
+```{r}
+library(BiocInstaller)
+biocVersion()
+```
+### Classes for genomic ranges
+
+In week 2 we did considerable hands-on work with S4 classes and methods. You can get a broader view of this style of object oriented programming (OOP) [here](http://adv-r.had.co.nz/S4.html). Although we do not expect you to become an expert in the S4 system, it is helpful to have some general understanding as it will help you, for example, retrieve help files for our classes.
+
+You can learn about the Bioconductor class system [here](http://www.bioconductor.org/help/course-materials/2013/CSAMA2013/friday/afternoon/S4-tutorial.pdf). We are going to be working mostly with the GRanges S4 class. Mike has prepared a [reference card type guide](https://github.com/mikelove/bioc-refcard).
+
+Load the ERBS library and then the HepG2 object.  
+
+What is the class of HepG2 (hint: use the class function)?  
+What package is this class defined in?  
+
+```{r}
+library(ERBS)
+data(HepG2)
+class(HepG2)
+```
+You can also see it here:  
+
+```{r}
+class(HepG2)
+##More specifically you can see it here:
+attributes(class(HepG2))
+```
+Learn more about this class with:
+
+```{r}
+help("GRanges-class")
+```
+
+### Counting regions
+
+Explore the HepG2 object. How many regions are represented?
+
+```{r,message=FALSE}
+HepG2
+length(HepG2)
+unique(HepG2@ranges)
+```
+
+### Statistics on peak scores
+
+In the video we used the values method to extract meta-data on the regions. An alternative, and actually preferred approach going forward, is `mcols`.
+
+What is the median of the signalValue column for the HepG2 data?
+
+```{r}
+library(ERBS)
+data(HepG2)
+median(mcols(HepG2)$signalValue)
+```
+
+### In what chromosome is the region with the highest signalValue?
+
+```{r}
+i=which.max(mcols(HepG2)$signalValue)
+seqnames(HepG2[i])
+```
+### Tabulating by chromosome 
+
+How many regions are from chromosome 16?
+
+```{r}
+length(HepG2[seqnames(HepG2)=="chr16",])
+# or
+chr = seqnames(HepG2)
+table(chr)[16]
+```
+
+### Statistics on peak widths
+
+Make a histogram of the widths of the regions from all chromosomes (not just chr16). Note it has a heavy right tail.
+
+What is the median width?
+
+```{r}
+hist(HepG2@ranges@width)
+median(HepG2@ranges@width)
+
+# better:
+
+median( width(HepG2) )
+##You can see the histogram
+hist(width(HepG2),nclass=25)
+```
+
+See [book page](http://genomicsclass.github.io/book/pages/bioc1_igranges.html)
+
+## IRanges
+
+[book page](http://genomicsclass.github.io/book/pages/bioc1_igranges.html)
+
+### Operating on ranges: zooming with * 
+
+Load the `IRanges` package. Define an integer range starting at 101 and ending at 200. If we use the operation *2, this will zoom in, giving us a range with half the width. What is the starting point of the resulting range?
+
+```{r,message=FALSE}
+library(IRanges)
+x<-IRanges(101,200)
+y<-x*2
+```
+
+### Narrowing  
+
+Define an integer range starting at 101 and ending at 200. If we use the operation narrow(x, start=20), what is the new starting point of the range?
+
+```{r}
+x<-IRanges(101,200)
+narrow(x,start=20)
+```
+
+### Expanding with +  
+
+Define an integer range starting at 101 and ending at 200. If we use the operation +25, what is the width of the resulting range?
+
+```{r}
+x<-IRanges(101,200)
+x+25
+```
+### Range widths, vectorized
+
+Define an IRanges with starts at 1,11,21 and ends at 3,15,27. width() gives the widths for each range. What is the sum of the widths of all the ranges?
+
+```{r}
+x<-IRanges(c(1,11,21),c(3,15,27))
+x
+width(x)
+sum(width(x))
+```
+
+### Visualizing and projecting ranges
+
+Define an IRanges object, x, with the following set of ranges:
+
+Starts at 101,106,201,211,221,301,306,311,351,361,401,411,501
+
+Ends at 150,160,210,270,225,310,310,330,390,380,415,470,510
+
+What is the total width from 101 to 510 which is not covered by ranges in x?
+
+```{r,message=FALSE}
+Starts<-c(101,106,201,211,221,301,306,311,351,361,401,411,501)
+Ends<-c(150,160,210,270,225,310,310,330,390,380,415,470,510)
+x<-IRanges(Starts,Ends)
+x
+# install_github("genomicsclass/ph525x")
+library(ph525x)
+plotRanges(x)
+range(x)
+sum(width(gaps(x)))
+```
+
+### Disjoint subranges
+
+How many disjoint ranges are contained within the ranges in 'x' from the previous question? By disjoint ranges, we mean the following: for two ranges [1,10] and [6,15], there are three disjoint ranges contained within: [1,5], [6,10], and [11,15].
+
+```{r}
+disjoin(x)
+length(disjoin(x))
+```
+
+### Resizing
+
+An intra-range function we didn't show in the video is resize().
+
+Set up a grid of 2 stacked plots:
+
+```{r}
+par(mfrow=c(2,1))
+```
+
+Now use plotRanges() to plot the original 'x', and resize(x,1). You will have to set the xlim to make sure that the plots line up vertically. You can use plotRanges(x, xlim=c(0,600)) for example.
+
+```{r,message=FALSE}
+library(rafalib)
+par(mfrow=c(2,1))
+plotRanges(x)
+plotRanges(resize(x,1))
+```
+
+What is the best description for the operation resize(x,1)?
+
+Answer:  
+From the man page: resize resizes the ranges to the specified width where either the start, end, or center is used as an anchor. The default is `fix="start"`, so `resize(x,1)` gives you the starting integer of each range in `x`
+
+## GRanges
+
+[book page](http://genomicsclass.github.io/book/pages/bioc1_igranges.html#granges)
+
+In the first week, in the subsection "What We Measure and Why", we learned that DNA has two strands. These two strands are often called plus, "+", and minus, "-".
+
+The GRanges object in the GenomicRanges package extends the concept of interval ranges in two major ways. The ranges are now also identified by:
+
+1. the chromosome we are referring to (in Bioconductor, this is called "seqnames")
+
+2. the strand of the DNA we are referring to ("+" or "-"). No strand is labelled with a star, "*".
+
+Without these two pieces of information, a specification of a range of DNA would be ambiguous. 
+
+```{r}
+x = GRanges("chr1", IRanges(c(1,101),c(50,150)), strand=c("+","-"))
+x
+```
+
+### Understanding strand orientation with resize
+
+Let's make two ranges, with strand and chromosome information, and see how the range operations act based on strand.
+
+
+In the last assessment, we visualized IRanges with the plotRanges function in the ph525x library. We can get the internal IRanges from a GRanges object with the following code:
+
+```{r}
+ranges(x)
+```
+
+So let's define a new plotting function:
+
+```{r}
+plotGRanges = function(x) plotRanges(ranges(x))
+
+```
+Compare x and resize(x,1) using plotGRanges. The result of running resize(x,1) is two ranges of width 1 which start...
+
+```{r}
+library(rafalib)
+par(mfrow=c(2,1))
+plotGRanges(x)
+plotGRanges(resize(x,1))
+```
+
+### Intersecting transcripts with basic operations
+
+Suppose we have two different sets of ranges, which overlap somewhat but not entirely. This is the case for many genes, in which there are different versions of transcripts, also called isoforms. The different transcripts consist of exons which end up in the final mRNA molecule, and a number of transcripts can share exons or have exons which are overlapping but not identical ranges.
+
+We'll start with a toy example, and learn how to load real genes later:
+
+```{r}
+x = GRanges("chr1", IRanges(c(101,201,401,501),c(150,250,450,550)), strand="+")
+
+y = GRanges("chr1", IRanges(c(101,221,301,401,541),c(150,250,350,470,550)), strand="+")
+```
+
+Plot these two sets of ranges using par(mfrow=c(2,1)) and two calls to plotGRanges.
+
+```{r}
+par(mfrow=c(2,1)) 
+plotGRanges(x)
+plotGRanges(y)
+```
+
+If we want to keep the information about which set the ranges belong to, we could combine the two GRanges into a GRangesList:
+
+```{r}
+GRangesList(x,y)
+```
+
+However, if we want to combine them into a single GRanges, we can use c():
+
+```{r}
+c(x,y)
+```
+
+Find the total width which is covered by ranges in both x and y. Hint: use c(), disjoin() and %over%.
+
+```{r}
+disjoined<-disjoin(c(x,y))
+b<- x %over% y
+sum(width(x))+sum(width(y))-sum(width(disjoined))
+
+#or
+
+disjoined = disjoin(c(x,y))
+in.both = disjoined %over% x & disjoined %over% y
+sum(width(disjoined[ in.both ]))
+```
+
+### Subregions that distinguish transcripts
+
+What is the total width which is in x or y but not in both?
+
+```{r}
+sum(width(disjoined[ !in.both ]))
+```
+
+### The role of strand labeling in range operations
+
+Define a new genomic range, 'z', which covers `range(ranges(x))` but has the opposite strand.
+
+What is the number of ranges in x which overlap z according to the %over% command?
+
+```{r}
+z = GRanges("chr1", range(ranges(x)), strand="-")
+sum(x %over% z)
+```
+
+The %over% command is specific to strand. If we want to find the ranges regardless of strand, we need to assign a strand of "*".
+
+## Operating on GRanges
+
+See book page: [GRanges operations related to gene model, TSS, and promoter region identification](http://genomicsclass.github.io/book/pages/bioc1_grangeOps.html)
+
+## Finding Overlaps
+
+In this assessment we will be working with two sets of regions.
+
+```{r}
+library(ERBS)
+data(HepG2)
+data(GM12878)
+```
+
+### Indexing individual ranges
+
+Where does the 17th HepG2 region start?
+
+```{r}
+start(HepG2)[17]
+```
+
+### Closest regions in distinct GRanges
+
+```{r}
+d = distanceToNearest(HepG2[17],GM12878)
+i = subjectHits(d)
+start(GM12878[i])
+```
+
+### Measuring distance between closest regions
+
+What is the distance between the 17th region of HepG2 and its closest region in GM12878?
+
+```{r}
+d = distanceToNearest(HepG2[17],GM12878)
+mcols(d)$distance
+```
+
+### Summarizing proximities of nearest regions in a pair of GRanges
+
+For each region in HepG2 find the closest region in GM12878 and record the distance. What proportion of these distances are smaller than 2000 base pairs? Distance is a metadata column on the Hits object, so consider mcols().
+
+```{r}
+regions<-seq(1:length(HepG2))
+a<-sapply(regions,function(x){
+    d<-distanceToNearest(HepG2[x],GM12878)
+    mcols(d)$distance
+})
+length(a[a<2000])/length(a)
+```
+
+much more concisely....and quickly!
+
+```{r}
+d = distanceToNearest(HepG2,GM12878)
+mean( mcols(d)$distance < 2000)
+```
+
+## Genes as GRanges
+
+In this assessment we will be getting gene information for human genes from the Homo.sapiens library.
+
+```{r}
+library(Homo.sapiens)
+ghs = genes(Homo.sapiens)
+```
+### The number of genes in a reference build 
+
+What genome build was used here?
+
+```{r}
+genome(ghs)
+```
+How many genes are represented in ghs?
+
+```{r}
+length(ghs)
+```
+
+### Sorting genes into chromosomes
+
+What is the chromosome with the most genes?
+
+```{r}
+which.max(table(ghs@seqnames))
+```
+
+### The distribution of "gene lengths"
+
+Make a histogram of the widths of genes (use the width() on the GRanges object). This width gives the number of basepairs from the start of the gene to the end, so including exons and introns.
+
+```{r}
+w = width( ghs )
+hist( w )
+## the larger values are so much larger than the bulk of the data
+## that we can barely see the frequencies of large values in the histogram 
+## the log transformation better shows how fat the right tail is:
+hist( log10(w))
+```
+
+### Statistics on gene lengths
+
+What is the median gene width?
+
+```{r}
+median(width(ghs))
+```
+
+## Finding and getting annotation for closest gene
+
+In this assessment (which deals with topics in several videos) we will find the closest genes to some of our binding sites. We will use a consensus set of regions. In the video we did it like this:
+
+```{r}
+res = findOverlaps(HepG2,GM12878)
+erbs = HepG2[queryHits(res)]
+erbs = granges(erbs)
+```
+The following command is similar:
+
+```{r}
+erbs2= intersect(HepG2,GM12878)
+```
+
+### Comparing consensus methods
+
+```{r}
+identical(erbs,erbs2)
+```
+`erbs` and `erbs2` are not identical!
+
+```{r}
+## first order them
+erbs3 = erbs[order(erbs),]
+##confirm same chr
+all( seqnames(erbs2)==seqnames(erbs3) )
+mean( start(erbs2)==start(erbs3) & end(erbs2)==end(erbs3) )
+##the intersection should be smaller
+all( width(erbs2) <= width(erbs3) )
+```
+Over 90% of these regions in these two objects are the same with the different regions being smaller in erbs2.
+
+### A one-liner for transcription start sites
+
+Using the ghs regions:
+
+```{r}
+library(Homo.sapiens)
+ghs = genes(Homo.sapiens)
+```
+
+and what you learned in the video, convert the ghs object to one that represents just the tss
+
+```{r}
+tssgr<-resize(ghs,1)
+```
+
+What is the TSS (Transcription Start Site) of the gene with ID: 100113402?
+
+```{r}
+start(tssgr["100113402"])
+```
+
+Hint: look at the ghs in the console. Note that the names of the ranges are the same as the GENEID column. So you can index the ranges directly with "100113402"
+
+### The gene with TSS nearest a binding site
+
+Now using the erbs regions defined in a previous question:
+
+```{r}
+library(ERBS)
+data(HepG2)
+data(GM12878)
+res = findOverlaps(HepG2,GM12878)
+erbs = HepG2[queryHits(res)]
+erbs = granges(erbs)
+```
+What is the GENEID of the gene with TSS closest to the 4th region of erbs?
+
+```{r}
+library(Homo.sapiens)
+ghs = genes(Homo.sapiens)
+tssgr= resize(ghs,1)
+i = nearest(erbs[4],tssgr)
+mcols(tssgr)$GENEID[i]
+```
+
+### Translating ENTREZ ID to symbol 
+
+In the question above, you identified a gene.
+Use the select function to determine which is the SYMBOL of this gene.
+
+```{r}
+library(Homo.sapiens)
+ghs = genes(Homo.sapiens)
+tssgr= resize(ghs,1)
+i = nearest(erbs[4],tssgr)
+gene<-as.character(values(tssgr[i])$GENEID)
+
+res=select(Homo.sapiens,key=gene,keytype="GENEID",column="SYMBOL")
+res
+```
+
+## Getting Sequence
+
+In this assessment we will get the sequence for the regions created like this:
+
+```{r,message=FALSE}
+library(ERBS)
+library(GenomicRanges)
+data(HepG2)
+data(GM12878)
+res = findOverlaps(HepG2,GM12878)
+erbs = HepG2[queryHits(res)]
+erbs = granges(erbs)
+```
+### Meticulous annotation of the originating genome build
+
+What genome build was used to create these regions?
+
+```{r}
+genome(erbs)
+```
+
+### GC content of binding regions
+
+Now load the human genome data
+
+```{r, message=FALSE}
+library(BSgenome.Hsapiens.UCSC.hg19)
+```
+  
+Now use the `getSeq` function to extract the sequence of each region in erbs. Then compute the GC-content (the number of C's + the number of G's divided by the length of sequence) of each.
+
+Q:What is the median GC-content
+
+```{r}
+library(stringr)
+erbseq=getSeq(Hsapiens,erbs)
+seqs=1:75
+props<-function (x) {(str_count(as.character(erbseq[[x]]),"C")+
+                    str_count(as.character(erbseq[[x]]),"G"))/length(erbseq[[x]])
+    }
+meds<-sapply(seqs,props)
+median(meds)
+```
+
+much easier...
+
+```{r}
+seqs = getSeq(Hsapiens,erbs)
+gc = alphabetFrequency(seqs)[,2:3]
+n = width(erbs)
+gccontent = rowSums(gc)/n
+median(gccontent)
+```
+
+### GC content of a shifted set of regions
+
+Now create a control set of regions by shifting erbs by 10000.
+
+What is the median GC-content of these control regions:
+
+```{r}
+control = shift(erbs,10000)
+controlseqs = getSeq(Hsapiens,control)
+gc = alphabetFrequency(controlseqs)[,2:3]
+n = width(control)
+controlgccontent = rowSums(gc)/n
+median(controlgccontent)
+```
+Compare boxplots of the gc-content of the binding sites and the control regions. Note that the binding sites have, in general, higher GC-content.
+
+```{r}
+boxplot(gccontent,controlgccontent)
+```
+
+A likely explanation for this is that we have higher GC-content in the promoter of genes (upstream from the transcription start site). And as we saw in the videos and earlier assessments, our binding sites tend to be close to the transcription start sites.

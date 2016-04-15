@@ -1,0 +1,27 @@
+---
+title: "Concluding Remarks"
+author: "Michael Hunt"
+date: "April 11, 2016"
+output: html_document
+---
+
+### Biotechnology and statistics
+
+Keep abreast of developments in assay technology and statistical methods for optimally interpreting assay outputs. Statisticians are constantly identifying biases and corrections useful with high-throughput platforms, and tools for implementing these solutions often appear first in Bioconductor.
+
+### Genomic data management and analysis
+
+Document your data structures.  This applies to systems of files, which we can manage and annotate using GenomicFiles, and to systems of objects derived from files and preprocessing pipelines, which we can manage and annotate using ExpressionSets or SummarizedExperiments.
+Document your analyses.  It is seldom the case that a simple script represents all the work underlying a set of findings, and systematic approaches should be use to organize and archive full workflows.  In course 525.6x we will illustrate package and vignette construction that can be useful for documenting complex workflows.
+
+### Statistical principles
+
+Be aware of pitfalls of flawed experimental design.  Confounding of technical batch with experimental or environmental condition of interest occurs with alarming frequency in high-profile studies.
+"Borrow strength" across observations.  This occurs most directly in the use of moderation procedures for gene-wise testing in limma, DESeq2, edgeR.  It is hard to assess variance of a given feature with limited numbers of observations, and shrinkage towards an estimate based on the population of features increases accuracy.  Understand how to demonstrate the utility of this principle with the spike-in data.
+Understand the assumptions underlying the statistical tests reported.  In the final week, you encountered approaches to gene set analysis that avoid the assumption of independence present in most elementary statistical procedures.  Independence is an exceptional condition, and understanding how to properly accommodate dependence in inference from real (as opposed to idealized) experiments is an important goal.
+
+### Sharpen your tools
+
+The 6x module will continue to focus on Bioconductor, considering some relatively advanced topics such as parallel computing, interactive visualization, and integrative multi-omics analyses.  7x will delve into RNA-seq and DNA variant analysis.
+
+We welcome your comments on the course and appreciate your efforts.

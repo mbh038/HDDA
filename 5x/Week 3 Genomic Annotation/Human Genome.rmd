@@ -1,0 +1,73 @@
+---
+title: "Human Genome"
+author: "Michael Hunt"
+date: "April 10, 2016"
+output: html_document
+---
+
+We'll now wrap up our treatment of advanced annotation with some review and some discussion of some higher level annotation concepts.
+
+Just remember that there's a hierarchy that we can take, as its base, the reference genomic sequence for an organism.  
+
+For most organisms, this is organized into chromosomes, and these themselves are specified by linear sequences of nucleotides.  
+
+At the next level, we have the organization of chromosomal sequence into what I'll call regions of interest.  
+
+Genes are the most prominent example of this, but DNA variance, copy number variations, CPG sites,and other regions can be regarded as biological significance.
+
+And having data structures that allow us to compute on collections of these regions are critical.
+
+We've talked a lot about that, we've given examples.
+
+Then, above this level, we have the organization of genes, or gene products, into groups that have similar structural or functional properties.
+
+They may live on a certain cytoband of the chromosome. They may all be involved in a certain biological process, like apoptosis, and we have annotation-- a great deal of annotation-- on pathways, genes that function together, genes that live together.
+And this is the higher level of organization that we haven't spent too much time on.
+But I will introduce you to that as we move through this talk.
+
+So first of all, let's just remember, `Biostrings` is a basic library that has a nice function, called `available.genomes`.
+
+```{r}
+library(Biostrings)
+available.genomes()
+```
+And this is a case where r is helping us to discover resources thatlive inside the bioconductor project. So we see that there are 82 different packages that
+contain reference sequence for different organisms and different reference builds of those organisms.
+
+Now, I want to emphasize the idea that the version of a reference build is extremely important and it's very difficult to transition from one reference build to another.
+
+For example, here we have hg19 with UCSC as the origin.
+
+```{r}
+available.genomes()[46]
+```
+And over here, we have NCBI having distributed GRCH 38.
+
+```{r}
+available.genomes()[41]
+```
+This is the most recent build of the human genome, created in the end of 2013. hg19 was created at the end of 2009. So it takes time, and there's considerable reorganization.
+
+We've discussed, in the liftover video, how you can convert genomic coordinates
+from one reference build to another.
+
+You can convert from hg19 to hg38 using a specific chain file, and you can convert in the other direction. And we showed the example of that. (Did we? Where?)
+
+Another point to remember is that we want to label our data structures with the genome build from which they are derived. And that's why we have a `genome` function, or method, and a `genome` tag that can be given a value for most of the objects that hold sequence information.
+
+For example, if I move on to 
+
+```{r}
+library(BSgenome.Hsapiens.UCSC.hg19)
+Hsapiens
+```
+I have an object called Hsapiens. We've seen this report before.
+It tells us what the sequences are, the chromosomes, and then the currently-
+or, at the time of hg19-- sequence elements that could not be mapped to chromosomes directly. But we can also say, for example,
+
+```{r}
+head(genome(Hsapiens))
+```
+And we will see that each one of these sequences has a tag, telling us that it comes from the build hg19.
+
+That's a good habit to get into. When you build a `GRanges`, when you create some sort of object that represents genomic information, and includes coordinates, label the object with the name of the reference build.

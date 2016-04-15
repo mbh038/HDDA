@@ -1,0 +1,60 @@
+---
+title: "PH525 4x HDDA: Conditional Expectations"
+author: "Michael Hunt"
+date: "April 2, 2016"
+output: html_document
+---
+
+## Conditional Expectations
+
+Throughout this assessment it will be useful to remember that when our data are 0s and 1s, probabilities and expectations are the same thing. We can do the math, but here is an example in the form of R code:
+
+```{r}
+n = 1000
+y = rbinom(n,1,0.25)
+##proportion of ones Pr(Y)
+sum(y==1)/length(y)
+##expectaion of Y
+mean(y)
+```
+
+### Conditional Expectation Exercises #1
+
+Generate some random data to imitate heights for men (0) and women (1):
+
+```{r}
+n = 10000
+set.seed(1)
+men = rnorm(n,176,7) #height in centimeters
+women = rnorm(n,162,7) #height in centimeters
+y = c(rep(0,n),rep(1,n))
+x = round(c(men,women))
+##mix it up
+ind = sample(seq(along=y))
+y = y[ind]
+x = x[ind]
+```
+Treating the data generated above as the population, if we know someone is 176 cm tall, what it the probability that this person is a woman: $\text{Pr}(Y=1|X=176)=E(Y|X=176)$?
+
+```{r}
+mean(y[x==176])
+```
+
+### Conditional Expectation Exercises #2
+
+Now make a plot of $E(Y|X=x)$ for x=seq(160,178) using the data generated in Conditional Expectation Exercises #1.
+
+Suppose for each height $x$ you predict $1$ (female) if $Pr(Y|X=x)\gt 0.5$ and $0$ (male) otherwise. What is the largest height for which you predict female ?
+
+```{r}
+xs<-160:178
+pys<-sapply(xs,function(k){
+    mean(y[x==k])
+})
+plot(xs,pys,xlab="x",ylab="Probability (woman)")
+abline(h=0.5,col="red")
+abline(v=168,col="blue")
+
+max(xs[pys>0.5])
+```
+

@@ -1,0 +1,41 @@
+---
+title: "Coordination"
+author: "Michael Hunt"
+date: "April 9, 2016"
+output: html_document
+---
+
+Book chapter: [Management of genome-scale data: Object-oriented solutions/coordination](http://genomicsclass.github.io//book/pages/bioc1_mgt_gsd.html#coordinate)
+
+### Integrity assurances with ExpressionSet
+
+Let's use the genefu package again to work with breast cancer expression data.d4
+
+```{r}
+library(Biobase)
+library(genefu)
+data(nkis)
+dim(demo.nkis)
+head(demo.nkis)[,1:8]
+```
+Try the following:
+
+```{r}
+data.nkis<-t(data.nkis)
+nkes = ExpressionSet(data.nkis, phenoData=AnnotatedDataFrame(demo.nkis),
+featureData=AnnotatedDataFrame(annot.nkis))
+```
+How many errors were generated with this command?
+
+Fix using `data.nkis<-t(data.nkis)`
+
+### Fixing the mismatched elements   
+
+What must be done to correct the errors in the previous attempt at making an ExpressionSet?
+
+transpose the sample data in demo.nkis  
+don't supply the feature metadata in this step   
+transpose the expression data matrix in data.nkis - correct  
+there was no error 
+
+The number of columns of the expression data matrix must agree with the number of rows of the phenoData component. Taking the transpose of the expression data matrix solves the problem.

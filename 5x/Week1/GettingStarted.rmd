@@ -1,0 +1,25 @@
+---
+title: "5x Initial Assessments"
+author: "Michael Hunt"
+date: "April 5, 2016"
+output: html_document
+---
+
+### Package annotation check
+
+Which of the following biocViews terms is not employed to annotate the Hiiragi2013 experimental data package?
+
+Answer:  
+RNASeqData is not used as the experiment did not involve RNA sequencing; see the [landing page](http://bioconductor.org/packages/release/data/experiment/html/Hiiragi2013.html)
+
+
+### Reference chromosome lengths
+
+In human genome reference build hg19, what is the length of chromosome 16?
+
+Answer:  
+
+```{r,message=FALSE}
+library(BSgenome.Hsapiens.UCSC.hg19)
+nchar(Hsapiens$chr16)
+```

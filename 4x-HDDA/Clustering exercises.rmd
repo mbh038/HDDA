@@ -1,0 +1,73 @@
+---
+title: "PH525 4x HDDA: Clustering exercises"
+author: "Michael Hunt"
+date: "April 1, 2016"
+output: html_document
+---
+
+### Hiearchichal Clustering Exercises #1
+
+Create a random matrix with no correlation
+
+```{r}
+set.seed(1)
+m = 10000
+n = 24
+x = matrix(rnorm(m*n),m,n)
+colnames(x)=1:n
+```
+
+Run hierarchical clustering on this data with the `hclust` function with default parameters to cluster the columns. Create a dendrogram.
+
+```{r}
+d <- dist( t(x) )
+hc<-hclust(d)
+plot(hc)
+```
+
+### Hiearchichal Clustering Exercises #2
+
+Set the seed at 1, `set.seed(1)` and replicate the creation of this matrix 100 times.
+then perform hierarchical clustering as in the solution to question 2.4.1 and find the number of clusters if you use `cutree` at height 143. Note that this number is a random variable.
+
+My way: works, but creates huge 3d matrix of all the x's at once, unnecessarily.
+ ```{r}
+# set.seed(1)
+# a<-replicate(N,{
+# m = 10000
+# n = 24
+# x = matrix(rnorm(m*n),m,n)
+# })
+ ```
+
+ ```{r}
+# library(rafalib)
+# ns<-1:100
+# 
+# hs = sapply(ns,function(k){
+#     d<-dist(t(a[,,k]))
+#     hc<-hclust(d)
+#     max(cutree(hc,h=143))
+# })
+# hist(hs)
+# sd(hs)
+# popsd(hs) # unbiased estimate of sd
+```
+Model answer: (avoids the huge 3D matrix of all 100 x's at once.
+Instead, each x is created on the fly:)
+
+```{r}
+library(rafalib)
+set.seed(1)
+m = 10000
+n = 24
+nc = replicate(100,{
+    x = matrix(rnorm(m*n),m,n)
+    hc = hclust( dist( t(x)))
+    length(unique(cutree(hc,h=143)))
+})
+plot(table(nc)) ## look at the distribution
+popsd(nc) # unbiased estimate of sd
+```
+
+

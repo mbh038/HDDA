@@ -1,0 +1,40 @@
+---
+title: "Basic data management assessment"
+author: "Michael Hunt"
+date: "April 6, 2016"
+output: html_document
+---
+
+Book "chapters" include
+
+[Management of genome-scale data: Object-oriented solutions](http://genomicsclass.github.io//book/pages/bioc1_mgt_gsd.html)  
+[SummarizedExperiment in depth](http://genomicsclass.github.io//book/pages/bioc1_summex.html)   
+[Management and processing of large numbers of BED files](http://genomicsclass.github.io//book/pages/bioc1_multibed.html)    
+
+The R data.frame is the workhorse for many tasks of table representation and statistical modeling.  However, it can be difficult to know exactly what the contents of any given row or column represent.  Bioconductor introduced an extension to data.frame called AnnotatedDataFrame that supports more detailed annotation on each column.  This short exercise examines its use.
+
+### Ambiguous variable names  
+
+The mtcars data.frame is familiar and used in many examples to demonstrate R computations.
+
+```{r}
+head(mtcars)
+```
+
+What are the units of "weight" (variable 'wt')?
+
+```{r}
+?mtcars
+```
+
+### Support for variable labels
+
+Bioconductor's Biobase package includes the definition of a data structure (S4 class) that allows additional information on variable semantics to be coupled to a data.frame.
+
+```{r}
+library(Biobase)
+mtc2 = AnnotatedDataFrame(mtcars)
+mtc2
+```
+When initialized in this way, the labelDescription component is empty. Which command successfully sets the labelDescription for 'wt' to "1000 lb"?
+

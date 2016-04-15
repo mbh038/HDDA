@@ -1,0 +1,264 @@
+---
+title: "Gene Set Analysis"
+author: "Michael Hunt"
+date: "April 11, 2016"
+output: html_document
+---
+
+### Gene set analysis: Basic concept
+
+What does "gene set testing" refer to? To test for differences in expression...
+
+ Testing individual genes across sets of samples  
+ Testing for differences between population in predefined sets of genes - correct    
+ Discovering sets of genes that behave similarly  
+ Testing for sets using gene expression data
+ 
+Answer:  
+The term "gene set testing" refers to testing for differential expression for a set of genes, rather than testing only one gene at a time.  
+
+
+### Distributional characteristics of sets of test statistics
+
+Which of the following statements applies to gene set testing? The t-statistics from individual genes within a gene set:  
+
+ are guaranteed to be independent  
+ can have positive, 0, or negative correlation  -  correct
+ follow a uniform under the null hypothesis  
+ are rarely well approximated with the t-distribution
+ 
+Answer:  
+The t-statistics can have any kind of positive, 0, or negative correlation, depending on the nature of the experiment and the genes in the set. Positive correlations can occur for example in the case of batch effects. If the genes in a set are similarly effected by batch, and batch effects are not corrected for, then a high t-statistic for one gene means that a high t-statistic for the other gene is more likely. Positive correlation can also occur, for example if one gene positively regulates the other gene (in terms of gene regulatory networks). Genes within a set can also potentially have a negative correlation if one gene in a set is a negative regulator of another gene in the set. This variation could then lead to a negative correlation between the expression of these two genes, and therefore a negative correlation between the two t-statistics.  
+
+
+### Exploring dependence
+
+In lecture, we saw that the variance of the average of a set N of Normal variables with mean 0 and variance 1 is 1/N. This can be demonstrated in R with a simulation of 10,000 averages for N=10:
+
+```{r}
+var(rowMeans(matrix(rnorm(10000 * 10, 0, 1), ncol=10)))
+```
+which comes close to 1/10.
+
+Suppose we have 10 Normal variables with mean 0 and variance 1, but each random variable has a correlation of 0.7 with the other variables. We can create such random variables in R using the multivariate normal distribution:
+
+```{r}
+library(MASS)
+Sigma = matrix(.7, ncol=10, nrow=10)
+diag(Sigma) = 1
+mvrnorm(n=1,mu=rep(0,10),Sigma=Sigma)
+```
+
+This gives 10 numbers which fit the above description. If we set n=2 we will get two rows of 10 numbers.
+
+What is the variance of the average of these 10 random variables? (Hint: set n=10000 and take the variance of the 10,000 averages). (Hint #2: this was also given as a formula in lecture)
+
+```{r}
+library(MASS)
+Sigma = matrix(.7, ncol=10, nrow=10)
+diag(Sigma) = 1
+var(rowMeans(matrix(mvrnorm(n=10000,mu=rep(0,10),Sigma=Sigma), ncol=10)))
+```
+The formula for this is
+
+$$\begin{eqnarray}
+Var(\bar{t}) &=& \frac{1}{N^2} \mbox{var}( (1 \dots 1) (t_1 \dots
+t_N)' ) \\
+&=& \frac{1}{N^2}(1 \dots 1)
+\begin{pmatrix}
+1 & \rho & \dots & \rho & \rho \\
+\rho & 1 & \rho & \dots  & \rho \\
+\dots & \dots & \dots & \dots & \dots \\
+\rho &  \rho & \dots & \rho & 1 \\
+\end{pmatrix}
+(1 \dots 1) ' \\
+&=& \frac{1}{N^2}\{N + (N-1) N \rho \} \\
+&=& \frac{1}{N}\{1 + (N-1) \rho \} \\
+\end{eqnarray} %]]$$
+
+So with $\rho$ = correlation = 0.7, and N=10, we have $\bar{t}=0.73$
+
+### What is the practical consequence of the above demonstration?
+
+We saw in lecture that the variance of the average of positively-correlated Normal random variables is larger than the variance of the average of independent Normal random variables? If we test the average of t-statistics from 10 positively-correlated genes...
+
+ we need to widen the null distribution - correct  
+ we need to narrow the null distribution  
+ we can no longer obtain a null distribution  
+ we do not need a null distribution to obtain a p-value  
+ 
+Answer:   
+Under the null hypothesis, the average of 10 positively-correlated genes will have higher variance than the average of genes with correlation of 0 to each other. So we need to widen the null distribution. If we do not, an average t-statistic will look more surprising (less likely) than it actually is.  
+
+### Gene set analysis with the roast algorithm
+
+
+The following two questions are advanced. Please ask in the Discussion Forum.
+
+We will explore software for testing differential expression in a set of genes. These tests differ from the gene-by-gene tests we saw previously. The gene set testing software we will use lives in the `limma` package.
+
+For this assessment we will download an experiment from the GEO website, using the getGEO function from the GEOquery package:
+
+```{r}
+library(GEOquery)
+e = getGEO("GSE34313")[[1]]
+```
+
+This dataset is hosted by GEO at the following [link](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE34313)
+
+The experiment is described in the paper by Masuno 2011.
+
+Briefly, the investigators applied a glucocorticoid hormone to cultured human airway smooth muscle. The glucocorticoid hormone is used to treat asthma, as it reduces the inflammation response. However, it has many other effects throughout the different tissues of the body.
+
+The groups are defined in the `characteristics_ch1.2` variable:
+
+```{r}
+e$condition = e$characteristics_ch1.2
+levels(e$condition) = c("dex24","dex4","control")
+table(e$condition)
+## Note that with ExpressionSets we can access the phenoData columns directly
+## Specifically, note that e$condition is equivalent to pData(e)$condition
+```
+
+This data includes GO terms for every gene. We can see these in looking at the feature annotations:
+
+```{r}
+names(fData(e))
+fData(e)$GO_ID[1:4]
+```
+
+We will compare the control samples to those treated with dexamethasone (the hormone) after 4 hours.
+
+```{r}
+lvls = c("control", "dex4")
+es = e[,e$condition %in% lvls]
+es$condition = factor(es$condition, levels=lvls)
+```
+
+The following lines run the linear model in limma. We note that the top genes are common immune-response genes (CSF2, LIF, CCL2, IL6). Also present is FKBP5, a gene which regulates and is regulated by the protein which receives the glucocorticoid hormone.
+
+```{r}
+library(limma)
+library(qvalue)
+design = model.matrix(~ es$condition)
+fit = lmFit(es, design=design)
+fit = eBayes(fit)
+topTable(fit)[,c(6,7,18,22)]
+```
+
+We will use the ROAST method for gene set testing. We can test a single gene set by looking up the genes which contain a certain GO ID, and providing this to the roast function.
+
+The roast function performs an advanced statistical technique, rotation of residuals, in order to generate a sense of the null distribution for the test statistic. The test statistic in this case is the summary of the scores from each gene. The tests are self-contained because only the summary for a single set is used, whereas other gene set tests might compare a set to all the other genes in the dataset, e.g., a competitive gene set test.
+
+The result here tells us that the *immune response* genes are significantly down-regulated, and additionally, mixed up and down.
+
+# Immune response
+```{r}
+set.seed(1)
+idx = grep("GO:0006955", fData(es)$GO_ID)
+length(idx)
+r1 = roast(es, idx, design)
+r1
+```
+
+Set the seed at 1 (set.seed(1)) and repeat the above for the go term associated with "GO:0045454". What is the p.value for genes in this gene set being down regulated?
+
+```{r GO:0045454}
+set.seed(1)
+idx = grep("GO:0045454", fData(es)$GO_ID)
+length(idx)
+r1 = roast(es, idx, design)
+r1
+```
+
+### Inference for multiple gene sets
+
+We can also use the mroast function to perform multiple roast tests. First we need to create a list, which contains the indices of genes in the `ExpressionSet` for each of a number of gene sets. We will use the `org.Hs.eg.db` package to gather the gene set information. The following code used R to extract and organize GO annotations from a somewhat messy annotation provided by the manufacturer.
+
+```{r}
+library(org.Hs.eg.db)
+org.Hs.egGO2EG
+go2eg = as.list(org.Hs.egGO2EG)
+head(go2eg)
+```
+
+The following code unlists the list, then gets matches for each Entrez gene ID to the index in the `ExpressionSet`. Finally, we rebuild the list.
+
+```{r}
+govector = unlist(go2eg)
+golengths = sapply(go2eg, length)
+head(fData(es)$GENE)
+
+idxvector = match(govector, fData(es)$GENE);table(is.na(idxvector))
+##This is the organized list of indexes for genes per GO term:
+idx = split(idxvector, rep(names(go2eg), golengths));go2eg
+##We can see the genes like this:
+go2eg[[1]]
+fData(es)$GENE[idx[[1]]]
+```
+
+We need to clean this list such that there are no NA values. We also clean it to remove gene sets which have less than 10 genes.
+
+```{r}
+idxclean = lapply(idx, function(x) x[!is.na(x)])
+idxlengths = sapply(idxclean, length)
+idxsub = idxclean[idxlengths > 10]
+length(idxsub)
+```
+With these indexes in place we are now ready to run mroast. The following line of code runs the multiple ROAST test. This can take about 3 minutes.
+
+```{r}
+set.seed(1)
+r2 = mroast(es, idxsub, design)
+head(r2)
+```
+
+Find the GO term that has the the largest proportion of upregulated genes. How many genes does this term have?
+
+```{r}
+r2[which.max(r2$PropUp),1]
+```
+Note that this is a relatively small gene set. In fact, we can see that there is much more variability in this proportion for smaller gene sets:
+
+```{r}
+library(rafalib)
+mypar(2,1)
+plot(log2(r2$NGenes),r2$PropUp)
+plot(log2(r2$NGenes),-log10(r2$PValue))
+```
+
+### Filtering gene sets
+
+For the data in the previous question, rerun `mroast` using only gene sets with 50 or more genes.
+
+```{r}
+idxsub = idxclean[idxlengths >= 50]
+length(idxsub)
+set.seed(1)
+r3 = mroast(es, idxsub, design)
+head(r3)
+```
+
+In this new analysis, what is the GO term has the largest proportion of upregulated genes (answer should be in this form GO:000001)?
+
+
+```{r}
+size = sapply(idxsub,length)
+idxsub2= idxsub[size>=50]
+r3 = mroast(es, idxsub2, design)
+rownames(r3[which.max(r3$PropUp),])
+```
+
+### Annotation check
+
+Use select and the GO.db annotation package to find the TERM for GO:0000776.
+
+
+different (more) information...
+```{r}
+library(GO.db)
+columns(GO.db)
+keytypes(GO.db)
+select(GO.db, keys="GO:0000776",columns="TERM") 
+```
+

@@ -1,0 +1,163 @@
+---
+title: "Getting the Sequence of Regions"
+author: "Michael Hunt"
+date: "April 10, 2016"
+output: html_document
+---
+
+```{r}
+library(ERBS)
+data(HepG2) # a GRanges object
+```
+Hepg2 is a GRanges that tells us where ChiP-seq experiments have identified locations where the estrogen receptor nuclear protein will bind. These are 'binding peaks'.
+
+What we'd like to do is check on the occurrence of a certain short sequence called the binding motif in the genomic sequence over which these binding peaks are found.
+
+Let us bring in a package called `BSgenome.Hsapiens.UCSC.hg19`.
+This is the reference build that was used for the labeling of these peaks.
+
+```{r}
+library(BSgenome.Hsapiens.UCSC.hg19)
+```
+
+This gives us a variable called `Hsapiens`, which evaluates to a little report with metadata about the construction of the data object:
+
+```{r}
+Hsapiens
+```
+and we can get the chromosomal sequence, let's say for chromosome 17,
+by using the dollar sign operator.
+
+```{r}
+c17=Hsapiens$chr17
+c17
+```
+So whenever you feel like looking up the sequence of some genomic feature--it could be a microarray probe or a binding motif or a short-read-- you could, in principle, take your string and match it against this `DNAString`.
+
+A `DNAString` is a very special container for representing long sequences of strings, like this 81 million character string.
+
+### `getSeq`
+
+What we want to do right now is take advantage of a function called `getSeq`.
+
+A generic function for extracting a set of sequences (or subsequences) from a sequence container like a BSgenome object or other.
+
+`getSeq(x, ...)`
+
+where
+
+`x`	 A `BSgenome` object or any other supported object. Do showMethods("getSeq") to get the list of all supported types for `x`. 
+`...`	 Any additional arguments needed by the specialized methods.
+
+```{r}
+showMethods("getSeq")
+```
+
+What we want to do right now is take advantage of a function called getSeq.
+
+Note that `Hsapiens` is a `BSgenome` object and so can be used as the x argument to `getSeq`.
+
+And then other possible arguments can be found by checking other components of the documentation. I'm not going to go there now because I know, or for example, we can show-- showMethods getSeq-- we can see that all we have are the first argument specified here and the function will perform the right operation depending on what the second argument is.  
+
+So..let us call getSeq of Hsapiens with the second argument of HepG2, and call it hepseq.
+
+```{r}
+hepseq=getSeq(Hsapiens,HepG2)
+hepseq
+```
+
+What we now have is a DNA string set of length 303, which is the length of HepG2.
+
+```{r}
+length(HepG2)
+```
+
+So what we have here is a collection of DNA strings, one for each of the binding peaks. Let's check some of the widths to make sure that we're getting what we say we're getting.
+
+Look at first five elements of HepG2:
+
+```{r}
+width(HepG2[1:5])
+```
+
+These are exactly the widths of the first five DNA strings.
+
+So now we are going to look up the coincidence of a certain _motif_. It could be an octamer, it could be a hexamer depending on the type of protein that's binding the type of organism we're dealing with.
+
+But before we do that, let's make take a control set of DNA strings, call it `rhepseq` and shift the HepG2 binding regions by some large quantity-- let's say, 2,500 base pairs.
+
+```{r}
+rhepseq =getSeq(Hsapiens,shift(HepG2,2500))
+rhepseq
+```
+
+So this is going to be a collection of DNA strings-- `rhepseq`-- that has no principled relationship to the binding peaks for the ER protein.
+
+In this way we can compare the coincidence of our motif in `hepseq` versus `rhepseq` to have a sense for whether the discovery frequency that we identify is real or potentially just a function of the combinatorics of matching strings.
+
+The motif that we are going to work with-- we'll just make a string variable. We'll call it `mot` equals TCAAGGTCA:
+
+```{r}
+mot="TCAAGGTCA"
+```
+This is _one_ representation-- a _fixed_ representation-- of the binding motif for the ER protein.
+
+Now we can use `vmatchPattern`
+
+```{r}
+?vmatchPattern
+```
+`vmatchPattern(pattern, subject,`  
+:a set of functions for finding all the occurrences (aka matches, or hits) of a given _pattern_, (typically short), in (typically long) reference sequence or set of reference sequences  (aka the subject). 
+
+We'll refer to our motif as the _pattern_, and to the DNA string set that we're searching as the _subject_.
+
+Or, we could use `vcountPattern` to just count them up:
+
+```{r}
+vcountPattern(mot,hepseq)
+```
+`v` because hepseq is a coontainer for multiple strings.
+
+For each one of the strings in hepseq, I get a count of the number of times the motif occurs.
+
+Sum this up:
+
+```{r}
+sum(vcountPattern(mot,hepseq))
+```
+See that there are 20 hits of this nonamer `mot="TCAAGGTCA"`
+
+Now let's notice that we may also match the reverseComplement of hepseq. 
+
+```{r}
+sum(vcountPattern(mot,reverseComplement(hepseq)))
+```
+I could've `reverseComplement`ed mot, but I need to make that into a DNA string. That will take another little bit of time, so let's just do that. And we see that we can also match the `reverseComplement` with a reasonable frequency, and there's no reason to limit ourselves to direct matching.
+These strings can match in either the forward or reverse form. So we'll add these together.
+
+```{r}
+sum(vcountPattern(mot,hepseq))+ sum(vcountPattern(mot,reverseComplement(hepseq)))
+```
+This is going to give us the total sum-- 55 hits.
+
+Now, remember we made a negative control where we shifted away from the binding peaks sequences of the same length. We called it `rhepseq`.
+
+If we count hits for this, we get just 6.
+
+```{r}
+sum(vcountPattern(mot,rhepseq))+ sum(vcountPattern(mot,reverseComplement(rhepseq)))
+```
+So there's approximately a nine-fold enrichment of these sequences that are under the binding peaks of the ER protein relative to some randomly selected but equal-length collection of DNA strings that have been shifted away from the binding peaks using the shift operation.
+
+So this is sort of a sanity check that the data that we've assembled on ER binding is consistent with the idea that it should reflect the existence of the binding motif.
+
+This is not the way you would do this if you had a real motif-finding exercise. You would not use the fixed string `mot="TCAAGGTCA"` to represent the binding motif,
+but you would use a matrix representation of the model for this, indicating that there may be some variation in some of the bases.
+
+And we have a package called `MotifDb` that includes a lot of models for binding motifs. You would also not do direct pattern matching of this type, but you would use something that reflects the probabilistic structure of the binding process.
+
+There are programs called `MEME` and `FIMO` that are widely used to carry this out, and the `MotifDb` package does include some tools to help interface to those systems.
+
+So in summary, we have genomic sequence for all of the chromosomes of Homo sapiens.
+We have binding peak addresses in a `GRanges`. We can go and use `getSeq` to get the actual sequence content of those ranges, and then we can search for motifs in those sequences to help confirm that the data that we've assembled have biological plausibility.

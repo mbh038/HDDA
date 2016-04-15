@@ -1,0 +1,48 @@
+---
+title: "PH525.5x - Intro to Bioconductor - installs"
+author: "Michael Hunt"
+date: "April 5, 2016"
+output: html_document
+---
+
+To get the most out of this course, you should be very familiar with R and Rstudio, and should be able to install and load packages as they are mentioned.  To verify this, try the following in your R session.
+
+```{r}
+library(Biobase)
+sessionInfo()
+```
+
+The R version should be 3.2.2 or 3.2.3.  If the library() command fails, you should perform a basic Bioconductor installation. Do the following:
+
+```{r}
+source("http://www.bioconductor.org/biocLite.R")
+biocLite()
+```
+
+A collection of core packages will be installed.
+
+A package developed specifically for this course should be obtained using
+
+```{r}
+library(devtools)
+install_github("genomicsclass/ph525x")
+```
+u
+In order to carry out the tasks of the first week, you will need to have some fairly large packages installed, including these Bioconductor packages:
+
+`IRanges`
+`TxDb.Hsapiens.UCSC.hg19.knownGene`
+`GenomicFeatures`
+
+`BSgenome.Hsapiens.UCSC.hg19`
+`SNPlocs.Hsapiens.dbSNP.20120608`
+`Homo.sapiens`
+
+Several of these packages are quite large, for example BSgenome.Hsapiens is 656MB and SNPlocs.Hsapiens is 211 MB.  If you have a slow internet connection you will want to install these well in advance.
+
+As you work through exercises, if a Bioconductor package not found error is encountered, use
+
+```{r}
+library(BiocInstaller)
+biocLite("GEOquery")
+```

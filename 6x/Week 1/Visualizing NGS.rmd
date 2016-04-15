@@ -1,0 +1,43 @@
+---
+title: "PHP525.6x W1 Visualizing NGS"
+author: "Michael Hunt"
+date: "April 14, 2016"
+output: html_document
+---
+
+Book page: [Visualizung NGS data](http://genomicsclass.github.io/book/pages/bioc2_vizNGS.html)
+
+We recall the HepG2 GRanges from the ERBS package, which provides very limited information in the narrowPeak format on the locations and sizes of ESRRA binding to DNA from a liver cell line.
+
+A higher resolution view of the ESRRA binding events is available in the bigWig format [here](http://hgdownload.cse.ucsc.edu/goldenpath/hg19/encodeDCC/wgEncodeSydhTfbs/wgEncodeSydhTfbsHepg2ErraForsklnStdSig.bigWig) (319 MB). The bigWig format gives us coverage information, similar to the coverage we saw from RNA-seq in the previous videos.
+
+Obtain the h2bw.rda from the URL http://bcfoundbucket.s3.amazonaws.com/h2bw.rda
+
+```{r}
+library(GenomicRanges)
+load("h2bw.rda") # 200 Mb!
+```
+Note that the output in bigWig presents much smaller genomic intervals than the narrowPeak data. We now have the coverage of ChIP-seq reads at each location in the genome which passed some minimal threshold (not the same as "peaks" as we will see below). If the coverage is identical at adjacent basepairs, then the region will be as wide as possible. The coverage information is present in the 'score' metadata column.
+
+### BigWig representation of ESRRA binding
+
+What is the median width in bases of ranges in h2bw?
+
+```{r}
+median(width(h2bw))
+```
+
+### BigWig scores in narrow peaks
+
+We can compare the bigWig intervals to the reported peaks.
+
+ 
+```{r}
+# if you don't have ERBS: install_github("genomicsclass/ERBS")
+library(ERBS) 
+data(HepG2)
+fo = findOverlaps(h2bw, HepG2)
+inpeak = queryHits(fo)
+```
+  
+What is the median score for the h2bw bigWig data in regions identified as peaks in HepG2?

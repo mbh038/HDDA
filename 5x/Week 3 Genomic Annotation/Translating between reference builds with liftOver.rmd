@@ -1,0 +1,31 @@
+---
+title: "Translating between reference builds with liftOver"
+author: "Michael Hunt"
+date: "April 10, 2016"
+output: html_document
+---
+
+Obtain the hg19 to hg38 liftover chain file and decompress:
+
+```{r, message=FALSE}
+download.file("http://hgdownload.cse.ucsc.edu/goldenPath/hg19/liftOver/hg19ToHg38.over.chain.gz",
+  "hg19ToHg38.over.chain.gz")
+library(R.utils)
+gunzip("hg19ToHg38.over.chain.gz")
+```
+
+We will use it to convert the HepG2 binding addresses to hg38.
+
+```{r,message=FALSE}
+library(ERBS)
+data(HepG2)
+library(rtracklayer)
+ch = import.chain("hg19ToHg38.over.chain") 
+nHepG2 = liftOver(HepG2, ch)
+```
+
+How far, in bases, has the first range in HepG2 (chr2, 20335378 is starting address) moved upstream in the hg38 build?:
+
+```{r}
+start(HepG2[1])-start(nHepG2[1])
+```

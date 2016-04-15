@@ -1,0 +1,66 @@
+---
+title: "Week 3: Gene and transcript model"
+author: "Michael Hunt"
+date: "April 10, 2016"
+output: html_document
+---
+
+### Parsing a gene model display
+
+(1 point possible)
+Install a recent version of the ph525x package.
+
+```{r}
+library(devtools)
+install_github("genomicsclass/ph525x")
+library(ph525x)
+stopifnot(packageVersion("ph525x") >= "0.0.16") # do over if fail 
+```
+Use the modPlot function to visualize a model for ESR1,
+
+the estrogen receptor 1 gene.
+
+```{r}
+modPlot("ESR1", useGeneSym=FALSE, collapse=FALSE) 
+```
+
+Each of the linear structures (line segments >with right-pointing arrow glyphs starting and entding with little yellowish polygons) is a
+ gene
+ exon
+ transcript - correct  . There are 27 of them.
+ intron
+ 
+Answer:
+
+The linear structures are transcripts, composed of untranslated regions at the ends, exons (small yellow rectangles), and introns (arrows between exons). The collection of transcripts makes up a "gene model".
+
+Next in our hierarchy of annotation resources is the grouping of sequence regions,  exons, and introns, and untranslated regions into gene models. And the fundamental resource for working with that is the TxDb set of packages.
+
+```{r}
+head(genome(Hsapiens))
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+txdb<-TxDb.Hsapiens.UCSC.hg19.knownGene
+genome(txdb)
+```
+There are methods that allow us to extract different types of sequence
+organization from this TxDb.
+
+For example,
+
+```{r}
+exbg=exonsBy(txdb,by="gene")
+```
+
+
+### Programmatic enumeration of transcripts
+
+What is the output of
+
+```{r}
+library(Homo.sapiens)
+length(transcriptsBy(Homo.sapiens, by="gene")$"2099")
+```
+
+Enter the length: 27 - which is the number of transcripts we saw on the modPlot.
+
+This may seem mysterious. We will learn about the relationship between integer codes (2099 is the NCBI Entrez Gene ID for ESR1) and "ESR1" later in this unit.

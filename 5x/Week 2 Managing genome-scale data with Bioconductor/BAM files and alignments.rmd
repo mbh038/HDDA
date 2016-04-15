@@ -1,0 +1,165 @@
+---
+title: "BAM files and alignments"
+author: "Michael Hunt"
+date: "April 8, 2016"
+output: html_document
+---
+
+### Setup and BAM header metadata
+
+All of the problems in this problem set will work with the HNRNPC knockdown BAM files.
+
+```{r,message=FALSE}
+library(RNAseqData.HNRNPC.bam.chr14)
+bf = RNAseqData.HNRNPC.bam.chr14_BAMFILES
+length(bf)
+library(GenomicFiles)
+bff = GenomicFiles(files=bf)
+library(Homo.sapiens)
+seqinfo(bff) = seqinfo(Homo.sapiens)
+bff
+```
+
+```{r}
+library(Rsamtools)
+bfl = BamFileList(file=bf)
+bfl
+seqinfo(bfl)
+```
+ScanBamHeader from the Rsamtools package helps to obtain metadata about a BAM file.
+
+```{r ScanBamHeader}
+library(Rsamtools)
+h1 = scanBamHeader(files(bff)[1])[[1]]
+```
+`names(h1)` shows elements, targets and text. You can use h1$text$'@PG' to determine information about the program that generated the BAM file.
+
+What was the version of `tophat` used to generate the BAM file? Look for `VN tag in the text component.
+
+```{r}
+str(h1)
+str(h1$text)
+h1$text$"@PG"
+h1$text$"@PG"[2]
+```
+
+### countBam and read length determination
+
+The `countBam` utility helps to determine record volume.
+
+```{r}
+c1 = countBam( files(bff)[1] )
+c1
+```
+Use arithmetic on the elements of c1 above to determine the read length of the HNRNPC sequencing runs.
+
+```{r}
+c1$nucleotides/c1$records
+```
+### ScanBamParam to control BAM processing
+
+The 'which' component of the ScanBamParam object can hold a GRanges to identify regions of interest in a query to a BAM file.
+
+```{r}
+myr = GRanges("chr14", IRanges(1, 20e6))
+par = ScanBamParam(which=myr)
+c2 = countBam(files(bff)[1], param=par)
+c2
+```
+
+### Distribution of insert sizes for paired-end reads
+
+We can request that scanBam return details of alignments, such as positions of primary and mate reads, and the insert size.
+
+```{r}
+p = ScanBamParam(which=GRanges("chr14", IRanges(20e6, 25e6)),
+  what=c("pos", "mpos", "isize"))
+sc2 = scanBam(files(bff)[1], param=p)
+```
+Visualize the distribution of signed insert sizes after trimming away outliers with
+
+```{r}
+trim = function(x, maxabs=300) x[abs(x)<maxabs]
+hist(trim(sc2[[1]]$isize))
+```
+
+Confining attention to reads aligned to the positive strand, what is the median insert size?
+
+```{r}
+str(sc2)
+a<-sc2[[1]]$isize
+median(a[a>0])
+```
+### Called base frequencies by sequencing cycle (position in read)  
+
+The `readGAlignments` function will return the nucleotide sequences for reads.
+
+```{r}
+library(GenomicAlignments)
+r1 = readGAlignments( files(bff)[1], param=ScanBamParam(what=c("seq", "mapq", "qual")))
+```
+The following function will compute relative frequencies of bases by position:
+
+```{r}
+btab = function(dss, pos) {
+  tmp = table(substr(dss, pos, pos))[c("A", "C", "G", "T")]
+  tmp/sum(tmp)
+}
+```
+Apply `btab` to `mcols(r1)$seq`.
+
+Which gives the sequence of relative frequencies of nucleotide "C" in positions 1,2,3,4?
+
+```{r}
+sapply(1:4, function(x) btab(mcols(r1)$seq, x))
+
+```
+### Scalable genomic iteration: the yieldSize parameter
+
+We can use the `BamFile` class directly to mediate queries to reads. To traverse the reads sequentially in chunks of a specified size, set the `yieldSize` parameter, and use `open()` to activate the sequential reading procedure. For example, in the following, each successive call to `readGAlignments` delivers 50000 records, up to the end of the file. The last chunk may have fewer records, and after all records have been retrieved, calls will return `NULL`.
+
+```{r}
+bf1 = BamFile(bf[1], yieldSize=50000)
+open(bf1)
+ry1 = readGAlignments(bf1, param=ScanBamParam(what="seq"))
+ry2 = readGAlignments(bf1, param=ScanBamParam(what="seq"))
+head(ry2[1])
+```
+What is the start position of the first read in ry2 as computed above?
+
+```{r}
+head(ry2[1])
+```
+Answer:  
+Characteristics of the first record of the second chunk are  
+(seqname, strand, cigar, length, start, end):  
+
+### Decay of base call quality in later cycles   
+
+In the following
+
+```{r}
+library(GenomicAlignments)
+r1 = readGAlignments( files(bff)[1], param=ScanBamParam(what=c("seq", "mapq", "qual")))
+```
+r1 includes information on base-call quality, encoded:
+
+```{r}
+r1q = mcols(r1)$qual
+r1q[1:3]
+```
+Focus attention on reads aligning to the + strand and use the coercion to matrix to obtain ordered values in [0,10] measuring base call quality.
+
+We'll check just the first 2000 reads.
+
+```{r}
+r1q = mcols(r1[strand(r1)=="+"])$qual
+r1qm = as(r1q,"matrix")
+dd = data.frame(jitter(r1qm[1:2000,]))
+boxplot(dd)
+abline(h=6,col="red")
+```
+
+At what cycle has the median quality score dipped below 6?
+
+Answer: 70. Examine the boxplot and embellish with an abline(h=6).

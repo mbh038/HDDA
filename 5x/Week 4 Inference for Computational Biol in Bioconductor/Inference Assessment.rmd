@@ -1,0 +1,132 @@
+---
+title: "Inference Assessment"
+author: "Michael Hunt"
+date: "April 11, 2016"
+output: html_document
+---
+
+In general, the variability we observe across biological units, such as individuals, within a population is referred to as _biological_. We refer to the variability we observe across measurements of the same biological unit, such as aliquots from the same biological sample, as _technical_. Because newly developed measurement technologies are common in genomics, technical replicates are often generated to assess experimental data. By generating measurements from samples that are designed to be the same, we are able to measure and assess technical variability. We also use the terminology _biological replicates_ and _technical replicates_ to refer to samples from which we can measure biological and technical variability respectively.
+
+It is important not to confuse biological and technical variability when performing statistical inference as the interpretation is quite different. For example, when analyzing data from technical replicates the population is just the one sample from which these come from, as opposed to the more general population, such as healthy humans or control mice. Here we explore this concept with an experiment that was designed to include both technical and biological replicates.
+
+The dataset we will study includes data from gene expression arrays. In this experiment, RNA was extracted from 12 randomly selected mice from two strains. RNA from all 24 mice were hybridized to microarrays, but we also pooled RNA from different mice and hybridized those as well.  Two such pooled samples included RNA from all 12 mice from each strain.  Other pools were also created, as we will see below, but we will ignore these for this assessment.
+
+```{r}
+library(devtools)
+install_github("genomicsclass/maPooling")
+```
+
+ We can see the experimental design using the pData function. The rows represent samples and the columns represent mice. A one in cell i,j indicates that RNA from mouse j was included in sample i. The strain can be identified from the row names (not a recommended approach).
+
+```{r}
+library(Biobase)
+library(maPooling)
+data(maPooling)
+e = maPooling;head(pData(e))
+```
+
+Note that ultimately we are interested in detecting genes that are differentially expressed between the two strains of mice, which we will refer to as strain 0 and 1. We can apply tests to the technical replicates of pooled samples or the data from 12 individual mice. We can identify these pooled samples because all mice from each strain were represented in these samples and thus the sum of the rows of experimental design matrix add up to 12:
+
+```{r}
+data(maPooling)
+pd=pData(maPooling)
+pooled=which(rowSums(pd)==12)
+```
+
+We also have microarray data for each individual mouse. For each strain we have 12  biological replicates. We can find them by looking for rows with just one 1. We remove some samples that were repeated so that we have biological replicates only:
+
+```{r}
+individuals=which(rowSums(pd)==1)
+##remove replicates
+individuals=individuals[-grep("tr",names(individuals))]
+```
+
+We can use this to create two measurement matrices representing technical replicates (matrix "pool") and biological replicates (matrix "indiv").
+
+```{r}
+pool = exprs(maPooling)[,pooled];indiv = exprs(maPooling)[,individuals]
+```
+
+We can also get the mouse strain for each:
+
+```{r}
+strain= ifelse(grepl("a",rownames(pData(maPooling))),0,1)
+g_pool = strain[pooled]
+g_indiv = strain[individuals]
+```
+We will use these objects in the questions below.
+
+### Comparing technical and biological variation genome-wide
+
+
+Compute the standard deviations for each gene for the strain defined by strain==1 across technical replicates and biological replicates.
+
+For what proportion of genes is the estimated biological variability larger than the estimated technical variability
+
+```{r,message=FALSE}
+library(genefilter)
+tech<-rowSds(pool[, g_pool == 1])
+bio<-rowSds(indiv[, g_indiv == 1])
+mean(bio>tech)
+## we can also make a plot
+plot(tech,bio)
+abline(0,1,col=2)
+```
+
+### Two-sample tests, genome-wide, with FDR
+
+For the data with technical replicates, `pool`, compute t-tests comparing strains 0 and 1 using the rowttests function in the genefilter package. Compute q-values using the qvalue package.
+
+How many genes have q-values < 0.05 ?
+
+```{r}
+library(genefilter)
+pvals<-rowttests(pool,factor(g_pool))$p.value
+library(qvalue)
+qvals = qvalue(pvals)$qvalues
+sum(qvals<0.05)
+```
+
+### Can the claims based on pooled data be confirmed?
+
+Now we are going to validate the genes found in the previous assessment question with biological replicates. Using the biological replicate dataset, compute p-values (using rowttests) for the genes that in the previous question we found to have q-values < 0.05 (using the technical replicates).
+
+For what proportion of these genes do we achieve the p-value from the biological replicates above 0.05?
+
+```{r}
+library(genefilter)
+pvals<-rowttests(pool,factor(g_pool))$p.value
+library(qvalue)
+qvals = qvalue(pvals)$qvalues
+index=which(qvals<0.05)
+
+pvals2<-rowttests(indiv[index,],factor(g_indiv))$p.value
+mean(pvals2>0.05)
+```
+Note that it is much larger than we expected given that we estimated an FDR of 5% in the first list. This is because the pooled data is not accounting for biological variability.
+
+### Application of the moderated t-test
+
+For the biological replicate data we computed p-values and q-values using `rowttests`:
+
+```{r}
+library(genefilter)
+library(qvalue)
+pvals = rowttests(indiv,factor(g_indiv))$p.value
+qvals = qvalue(pvals)$qvalue
+index=which(qvals<0.05)
+```
+Now use the limma package to obtain p-values using the moderated t-tests provided by the ebayes function. Obtain q-values From these by applying the qvalue function.
+
+What proportion of the genes with q-value < 0.05 obtained using t-tests have q-values < 0.05 when using the moderated t-test?
+
+```{r, limma,message=FALSE}
+library(limma)
+X = model.matrix(~g_indiv)
+fit = lmFit(indiv,X)
+eb = ebayes(fit)
+pvals2= eb$p.value[,2]
+qvals2 = qvalue(pvals2)$qvalue
+mean(qvals2[index]<0.05)
+```
+Note that we get very strong agreement because N is 12 here and thus the standard error estimates are not shrunk too much.

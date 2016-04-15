@@ -1,0 +1,144 @@
+---
+title: "DataFrame and SummarizedExperiment"
+author: "Michael Hunt"
+date: "April 9, 2016"
+output: html_document
+---
+
+[Book chapter introducing SummarizedExperiment](http://genomicsclass.github.io//book/pages/bioc1_summex.html)  
+
+[Book chapter on managing multiple BED files](http://genomicsclass.github.io//book/pages/bioc1_multibed.html)
+
+The `erma` package includes detailed information on cell lines analyzed in the epigenomics road map project. 
+
+```{r}
+library(BiocInstaller)
+biocLite("erma")
+```
+You can query anatomic locations from which samples were derived as follows
+
+```{r erma}
+library(erma)
+ee = makeErmaSet()
+class(colData(ee))
+length(names(colData(ee)))  # lots of attributes!
+table(ee$ANATOMY)
+```
+### How many samples are derived from brain?  
+Answer: 7  - note that the most common tissue sampled is blood.
+
+### DataFrame columns of arbitrary type
+
+Use the ErmaSet instance generated in the previous problem. Consider the code
+
+```{r}
+mydf = colData(ee)[,1:10]
+getClass("DataFrame")
+mydf$demomat = matrix(0, nr=nrow(mydf), nc=5)
+dim(mydf$demomat)
+dim(mydf)
+dim(data.frame(mydf))
+```
+
+Why do the last two dim() results disagree?
+
+Answer:  
+The data.frame class cannot treat the matrix 'demomat' as an atomic item but breaks it by columns into a list; each list entry counts as a column in the data.frame.  
+
+DataFrame is a highly general implementation of the data.frame concept; any R object satisfying certain weak conditions can be managed as a data 'column'.  
+
+### Managing RNA-seq data  
+
+A study is performed in which individuals are randomized to receive a drug or placebo. After a specified period, blood is extracted for RNA-seq analysis. `TopHat` is used to align reads and BAM files are obtained.
+
+What data structure should be used to manage paths to the BAM files?
+
+`SummarizedExperiment`   
+`DataFrame`  
+`GenomicFiles` -correct  
+`ExpressionSet`  
+
+Answer:  
+BAM files are (oftentimes voluminous) archives of information on short read alignments, and are typically not imported wholesale into R, but left on disk for targeted interrogation or chunk-wise traversal. `GenomicFiles` is the general class used to manage such collections; `Rsamtools` defines more specific containers of complementary utility.
+
+### Accessing count data   
+
+`summarizeOverlaps` is used to obtain counts of reads overlapping transcripts of interest, leading to a SummarizedExperiment "se".
+
+What command will extract the matrix of counts?
+
+`exprs(se)`  
+`counts(se)`  
+`getCounts(se)`  
+`assays(se)$counts` - correct
+
+```{r}
+library(RNAseqData.HNRNPC.bam.chr14)
+bfp = RNAseqData.HNRNPC.bam.chr14_BAMFILES
+library(Rsamtools)
+bfl = BamFileList(file=bfp)
+hnrnpcLoc = GRanges("chr14", IRanges(21677296, 21737638))
+library(GenomicAlignments)
+library(BiocParallel)
+register(SerialParam())
+se = summarizeOverlaps(hnrnpcLoc,bfl)
+se
+assays(se)$counts
+```
+
+assays() extracts a list of assay outputs, and summarizeOverlaps populates the entry 'counts'  
+
+### Annotating sample characteristics
+
+Suppose the vector of treatment assignments is created in vector "trt" and the elements are in correspondence with the columns of the count matrix. what command is used to bind this assignment information into the `SummarizedExperiment`?
+
+`pData(se) = "trt"`    
+`colData(se)$trt = trt` - correct   
+`trt(se) = trt`  
+`se@trt = trt`  
+ 
+Answer:  
+colData(se) will hold the sample information, and a vector can be added as a new column using dollar-sign syntax
+
+eg
+
+```{r colData}
+trt=seq(1,8)
+colData(se)$trt = trt
+colData(se)
+```
+
+### Tools for experiment-level annotation
+
+The paper on the experiment is published and received PubMed id "25705822"
+
+In what package do you find the pmid2MIAME function that can be used to extract study-specific metadata on the study lab and abstract of the report?
+
+AnnotationDbi  
+annotate  - correct
+AnnotationHub  
+annotationTools
+
+```{r, annotate}
+library(annotate)
+?pmid2MIAME
+```
+
+### Binding the MIAME data to the SummarizedExperiment  
+
+What method can be used to bind the MIAME information to the SummarizedExperiment?
+
+MIAME<-  
+annotation<-  
+metadata<-  correct
+pubInfo<-
+
+```{r MIAME}
+p<-pmid2MIAME("25705822")
+p
+```
+Answer: metadata<-  
+The technique of binding structured metadata to experimental assay data has not garnered great enthusiasm. Thus a generic metadata element must be used to do this.
+
+The metadata methods operate on a general list structure, so many kinds of metadata may be bound in if desired.
+

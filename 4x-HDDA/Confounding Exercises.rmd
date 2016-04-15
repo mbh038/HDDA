@@ -1,0 +1,115 @@
+---
+title: "Confounding Exercises"
+author: "Michael Hunt"
+date: "April 4, 2016"
+output: html_document
+---
+
+Load data:
+
+```{r}
+library(devtools)
+install_github("genomicsclass/dagdata")
+#did not do this - got data directly from genomicsclass/dagdata repo
+#install.packages("dagdata")
+library(dagdata)
+data(admissions)
+```
+
+```{r}
+print( admissions )
+```
+
+```{r}
+library(devtools)
+install_github("genomicsclass/GSE5859")
+```
+
+### Confounding Exercises #1
+
+Let's compute the proportion of men who were accepted:
+
+```{r}
+index = which(admissions$Gender==1)
+accepted= sum(admissions$Number[index] * admissions$Percent[index]/100)
+applied = sum(admissions$Number[index])
+accepted/applied
+```
+What is the proportion of women that were accepted?
+
+```{r}
+index = which(admissions$Gender==0)
+accepted= sum(admissions$Number[index] * admissions$Percent[index]/100)
+applied = sum(admissions$Number[index])
+accepted/applied
+```
+
+### Confounding Exercises #2   
+
+Now that we have observed different acceptance rates between genders, test for the significance of this result.
+If you perform an independence test, what is the p-value?
+
+Hint: create a table that has the totals for accepted and not-accepted by gender then use chisq.test
+
+```{r}
+atab<-as.data.frame(matrix(0,2,2))
+rownames(atab)<-c("Men","Women")
+colnames(atab)<-c("Accepted","Rejected")
+index = admissions$Gender==1
+men=admissions[index,]
+women=admissions[!index,]
+atab[1,1]= sum(men$Number * men$Percent/100)
+atab[1,2]= sum(men$Number*(1-men$Percent/100))
+windex = which(admissions$Gender==0)
+atab[2,1]= sum(women$Number * women$Percent/100)
+atab[2,2]= sum(women$Number * (1-women$Percent/100))
+atab
+chisq.test(atab)$p.value
+```
+This difference actually led to a lawsuit.
+
+Now notice that looking at the data by major, the differences disappear.
+
+```{r}
+index = admissions$Gender==1
+men = admissions[index,]
+women = admissions[!index,]
+print( data.frame( major=admissions[1:6,1],men=men[,3], women=women[,3]) )
+```
+
+How can this be? This is referred to as Simpson's Paradox.
+In the following questions we will try to decipher why this is happening.
+
+### Confounding Exercises #3 and #4 
+
+We can quantify how "hard" a major is using the percent of students that were accepted. Compute the percent that were accepted (regardless of gender) to each major and call this vector H
+
+Which is the hardest major? (enter a letter)
+
+```{r}
+major = admissions[1:6,1]
+men = admissions[1:6,]
+women =admissions[7:12,]
+H = (men$Number*men$Percent/100 + women$Number*women$Percent/100) / (men$Number+women$Number)
+H
+major[which.min(H)]
+min(H)
+```
+
+### Confounding Exercises #5
+
+For men, what is the correlation between the number of applications across majors and H?
+
+```{r}
+cor(H,men$Number)
+cor(men$Number,H) # same!
+```
+### Confounding Exercises #6
+
+For women, what is the correlation between the number of applications across majors and H?
+
+```{r}
+cor(H,women$Number)
+```
+
+There is confounding between gender and preference for "hard" majors: females are more likely to apply to harder majors (which have a smaller value of H). There is confounding between gender and preference for "hard" majors: females are more likely to apply to harder majors. - correct

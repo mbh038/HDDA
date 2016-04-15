@@ -1,0 +1,174 @@
+---
+title: "Factor Analysis and PCA"
+author: "Michael Hunt"
+date: "April 4, 2016"
+output: html_document
+---
+
+```{r}
+library(Biobase)
+library(GSE5859Subset)
+data(GSE5859Subset)
+```
+and define
+
+```{r}
+y = geneExpression - rowMeans(geneExpression)
+```
+Compute and plot an image of the correlation for each sample. Make two image plots of these correlations. In the first one, plot the correlation as image. In the second, order the samples by date and then plot the an image of the correlation. The only difference in these plots is the order in which the samples are plotted.
+
+```{r}
+library(RColorBrewer)
+library(rafalib)
+mypar(1,2)
+n=ncol(y)
+cors=cor(y)
+cols=colorRampPalette(rev(brewer.pal(11,"RdBu")))(100)
+image(1:n,1:n,cors,xaxt="n",yaxt="n",col=cols,xlab="",ylab="",zlim=c(-1,1))
+
+o <- order(sampleInfo$date)
+yo<-y[,o]
+cors=cor(yo)
+cols=colorRampPalette(rev(brewer.pal(11,"RdBu")))(100)
+image(1:n,1:n,cors,xaxt="n",yaxt="n",col=cols,xlab="",ylab="",zlim=c(-1,1))
+```
+
+Model Solution:
+
+```{r}
+##simple version
+library(rafalib)
+sex = sampleInfo$group
+mypar(1,2)
+cors = cor(y)
+image(cors)
+o = order(sampleInfo$date)
+image(cors[o,o])
+```
+
+
+```{r}
+##advanced version
+library(rafalib)
+sex = sampleInfo$group
+mypar(1,2)
+cols=colorRampPalette(rev(brewer.pal(11,"RdBu")))(100)
+cors = cor(y)
+image(1:ncol(y),1:ncol(y),cors,col=cols,zlim=c(-1,1),
+       xaxt="n",xlab="",yaxt="n",ylab="")
+axis(2,1:ncol(y),sex,las=2)
+axis(1,1:ncol(y),sex,las=2)
+o = order(sampleInfo$date)
+image(1:ncol(y),1:ncol(y),cors[o,o],col=cols,zlim=c(-1,1),
+      xaxt="n",xlab="",yaxt="n",ylab="")
+label = gsub("2005-","",sampleInfo$date[o])
+axis(2,1:ncol(y),label,las=2)
+axis(1,1:ncol(y),label,las=2)
+```
+
+### Factor Analysis Exercises #2
+
+Based on the correlation plots above, we could argue that there are at least two hidden factors. Using PCA estimate these two factors. Specifically, apply the svd to y and use the first two PCs as estimates.
+
+```{r}
+s <- svd(y)
+What <- s$v[,1:2] # these are the first two PCs.
+rownames(What)<-colnames(y)
+round(What,2)
+fit = s$u[,1:2]%*% (s$d[1:2]*t(What))
+var(as.vector(fit))/var(as.vector(y))
+```
+
+### Factor Analysis Exercises #3
+
+Plot each of the estimated factor ordered by date. Use color to denote month. The first factor is clearly related to date.
+
+Which of the following appear to be most different according to this factor?
+
+```{r}
+month=format(sampleInfo$date, "%m")
+pcs = svd(y)$v[,1:2]
+o = order(sampleInfo$date)
+cols = as.numeric(month)[o]
+mypar(2,1)
+for(i in 1:2){
+  plot(pcs[o,i],col=cols,xaxt="n",xlab="")
+  label = gsub("2005-","",sampleInfo$date[o])
+  axis(1,1:ncol(y),label,las=2)
+}
+```
+Answer: 23 June and 27 June
+
+### Factor Analysis Exercises #4 
+
+Use the svd function to obtain the principal components (PCs) for our detrended gene expression data y:
+
+How many principal components (PCs) explain more than 10% each of the variability?
+
+```{r}
+s = svd(y)
+varexplained = s$d^2/ sum(s$d^2)
+plot(varexplained)
+sum(varexplained>0.10)
+```
+
+### Factor Analysis Exercises #5
+
+Which PC most correlates (negative or positive correlation) with month?
+
+```{r}
+s = svd(y)
+month = factor( format(sampleInfo$date,"%m"))
+cors = cor( as.numeric(month),s$v)
+plot(t(cors))
+which.max(abs(cors))
+max(abs(cors))
+```
+
+### Factor Analysis Exercises #6
+
+Which PC most correlates (negative or positive correlation) with sex?
+
+```{r}
+s = svd(y)
+sex = sampleInfo$group
+cors = cor( as.numeric(sex),s$v)
+plot(t(cors))
+which.max(abs(cors))
+max(abs(cors))
+```
+
+### Factor Analysis Exercises #7
+
+Now instead of using month, which we have shown does not quite describe the batch, add the two estimated factors in Factor Analysis Exercises #6 to the linear model we used in previous exercises.
+
+```{r}
+X <- model.matrix(~sex+s$v[,1:2])
+```
+Apply this model to each gene, and compute q-values for the sex difference.
+
+How many q-values are <0.1 for the sex comparison?  
+
+```{r}
+library(limma)
+X <- model.matrix(~sex+s$v[,1:2])
+fit <- lmFit(y,X)
+k <- 2 ##second coef, for month
+ses <- fit$stdev.unscaled[,k]*fit$sigma
+ttest <- fit$coef[,k]/ses
+pvals <- 2*pt(-abs(ttest),fit$df)
+
+library(qvalue)
+library(genefilter)
+qval = qvalue(pvals)
+qvals = qval$qvalues
+sum(qvals<0.1)
+```
+What proportion of the genes are on chrX and chrY?  
+
+```{r}
+index = geneAnnotation$CHR[qvals<0.1]%in%c("chrX","chrY")
+mean(index)
+```
+
+All of them!

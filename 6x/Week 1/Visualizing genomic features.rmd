@@ -1,0 +1,214 @@
+---
+title: "PH525.6x W1: Visualizing genomic features"
+author: "Michael Hunt"
+date: "April 12, 2016"
+output: html_document
+---
+
+### Genome-wide visualization of peak heights
+
+Elaborate the visualization of GM12878 ESRRA peaks as follows
+
+```{r,message=FALSE}
+library(ERBS)
+library(ggbio)
+library(GenomeInfoDb)
+data(GM12878)
+seqlevels(GM12878, force=TRUE) = paste0("chr", 1:22)
+  autoplot(GM12878, layout="karyogram", aes(colour=log(peak)))
+```
+  
+What is the difference between the bars colored in light blue vs those colored in darker blue or black?
+
+ light blue bars are located where ESRRA peaks are relatively low    
+  light blue bars are located where ESRRA peaks are relatively high - correct    
+  light blue bars correspond to genomic locations with higher probability of ESRRA binding   
+  light blue bars correspond to genomic locations with lower probability of ESRRA binding  
+  
+ Answer:  
+ The key is based on the aes(colour=log(peak)) element of the call to autoplot.
+ 
+### An integrative visualization
+
+The following code combines information on two cell lines and the measured peak values.
+
+```{r}
+library(ERBS)
+data(HepG2)
+data(GM12878)
+HepG2$cell = "HepG2"
+GM12878$cell = "Bcell"
+tot = c(GM12878, HepG2)
+tot$peak10 = tot$peak/10 # copes with automatic scale of y axis
+seqlevels(tot, force=TRUE) = paste0("chr", 1:22)
+library(ggbio)
+library(scales)
+p = autoplot(seqinfo(tot))
+p = p + layout_karyogram(tot, aes(fill=cell, colour=cell), geom="rect") +
+    scale_colour_manual(values = alpha(c("green", "red"), .1)) +
+    scale_fill_manual(values = alpha(c("green", "red"), .1))
+p + layout_karyogram(tot, aes(x=start, y=peak10), ylim=c(15,30),
+    geom="point", color="blue", size=.8)
+```
+
+One chromosome is distinguished in this visualization by exhibiting a unusually dense set of binding events. Perform the following computations after computing tot 
+
+```{r}
+stot = split(tot, as.character(seqnames(tot)))
+w = sapply(stot, function(x) sum(width(x)))
+sort(w/seqlengths(tot)[names(w)])
+```
+
+Pick the chromosome with the greatest density of ESRRA binding sites.
+
+ chr1  
+ chr5  
+ chr19  - correct
+ chr17  
+ chr13  
+ chr21  
+
+### Multitrack visualization function
+
+Add the following function to your workspace:
+
+
+```{r}
+showz = function (sym = "ESRRA", radius = 1e+05) 
+{
+    require(ggbio)
+    require(erma)
+    require(ERBS)
+    es = genemodel(sym)
+    data(HepG2)
+    data(GM12878)
+    hsub = subsetByOverlaps(HepG2, es + radius)
+    gsub = subsetByOverlaps(GM12878, es + radius)
+    tracks(gene = es, hepNarr = autoplot(hsub), gmNarr = autoplot(gsub), 
+        title = sym)
+}
+```
+You can run the function with defaults, generating and viewing a ggbio object:
+
+```{r}
+p = showz()
+p
+```
+
+What is the value of the rightmost x-axis tick in this display?
+
+ 64.06 Mb  
+ 64.074 Mb  
+ 64.084 Mb  - correct  
+ 63.95 Mb
+
+### Incremental zooming into/out of display with ggbio
+
+A nice feature of the ggbio/ggplot2 framework is the availability of the state of the display for modification using operators. Try
+
+```{r}
+p+zoom(2)
+```
+Now what is the leftmost tick mark value on the x-axis?
+
+ 64.02 Mb  
+ 64.084 Mb  
+ 63.95 Mb  
+ 64.074 Mb
+ 
+### Using the debugger with a troublesome gene
+
+Use showz to view the binding patterns near the gene oncomodulin (OCM). It will fail with the default radius, so try again with radius = 2e6. But before running it, issue
+
+```{r}
+debug(showz)
+```
+Step through the code after issuing
+
+```{r,eval=FALSE}
+showz("OCM", radius=2e6)
+```
+How many ranges are present in the GRanges variable gsub? You can mention it in the debugger after it is computed.
+
+Answer: 9. With r=2e6, `showz` crashes
+Try
+
+```{r}
+subsetByOverlaps(GM12878, genemodel("OCM")+2e6)
+subsetByOverlaps(GM12878, genemodel("OCM")+5e6)
+```
+from within the `showz` function. With radius 2e6 hsub evaluates to zero and showz crashes. Use of debugger allows us to spot this.
+
+### Preparing modifications to esrraScan: accommodating multiple peak sets
+
+Here is the text of the esrraScan function with line numbers. We'd like to allow visualization of multiple peak sets, for example, both HepG2 and GM12878 in the same display.
+
+```
+  1 esrraScan = function (sym = "ESRRA", bindingGR, radius = 500000)  
+  2 {  
+  3     require(ERBS)  
+  4     require(Gviz)  
+  5     require(Homo.sapiens)  
+  6     require(TxDb.Hsapiens.UCSC.hg19.knownGene)  
+  7     txdb = TxDb.Hsapiens.UCSC.hg19.knownGene  
+  8     eid = select(Homo.sapiens, keys = sym, keytype = "SYMBOL",  
+  9         columns = "ENTREZID")  
+ 10     allg = genes(txdb)  
+ 11     must_concat = FALSE  
+ 12     curgAddr = genes(txdb, single.strand = FALSE, vals = list(gene_id = eid$ENTREZID))[[1]]  
+ 13     if (length(curgAddr) > 1) {  
+ 14         must_concat = TRUE  
+ 15         curgAddr$gene_id = eid$ENTREZID  
+ 16         curgAddr = curgAddr[which(as.character(seqnames(curgAddr)) %in%  
+ 17             paste0("chr", c(1:22, "X", "Y")))[1]]  
+ 18     }  
+ 19     curgNeigh = subsetByOverlaps(allg, curgAddr + radius)  
+ 20     if (must_concat)  
+ 21         curgNeigh = c(curgNeigh, curgAddr)  
+ 22     curgNeigh$symbol = mapIds(Homo.sapiens, keys = curgNeigh$gene_id,  
+ 23         keytype = "ENTREZID", column = "SYMBOL")  
+ 24     sc = subsetByOverlaps(bindingGR, range(curgNeigh))  
+ 25     message("getting ideogram...")  
+ 26     idxTrack = IdeogramTrack(genome = "hg19", chr = as.character(seqnames(curgNeigh[1])))  
+ 27     message("done.")  
+ 28     plotTracks(list(idxTrack, GenomeAxisTrack(), DataTrack(sc[,  
+ 29         7], name = "ESRRA peak values"), GeneRegionTrack(curgNeigh,  
+ 30         showId = TRUE, name = paste("genes near", sym)), GenomeAxisTrack()))  
+ 31 }  
+ ```
+At which line number is the genome-wide binding data restricted to the neighborhood of the gene of interest?
+
+Answer:  
+line 24 runs `subsetByOverlaps` on `bindingGR`
+
+### Preparing for display of multiple tracks
+
+(1/1 point)
+Refer to the numbered code display above. Suppose that we will use a list of GRanges to serve as a group of binding location tracks to be visualized. An obvious example is list(HepG2, GM12878). We will change the name of the bindingGR parameter to listOfBindingGR.
+
+Select the R code that constrains all elements of the list to the neighborhood of the gene of interest, assigning the result to conl.
+
+ `conl = subsetByOverlaps( listOfBindingGR, range(curgNeigh) ) ` 
+ `conl = lapply( listOfBindingGR, range(curgNeigh) ) ` 
+ `conl = lapply( listOfBindingGR, function(x) subsetByOverlaps(x, range(curgNeigh) ) )` - correct  
+ `for (i in 1:length(conl)) conl[[i]] = subsetByOverlaps(x[[i]], range(curgNeigh) )`
+ 
+Answer:  
+The third option is syntactically correct and returns a list of subsetted GRanges (some elements may be empty).  
+
+
+### Revising the plotTracks call
+
+Suppose we have succeeded in transforming `listOfBindingGR` to a suitable list of `DataTrack` instances with the peak scores for each element of `listOfBindingGR` in the neighborhood of the gene of interest. Call the resulting list `DTL`, and substitute `DTL` for the DataTrack call on lines 28-29.
+
+How should we modify the use of `list` on line 28 to allow `plotTracks` to succeed?
+
+ leave it alone  
+ replace with the combination operator c  -- correct  
+ use lapply  
+ it cannot be done  
+ 
+Answer:  
+`plotTracks` expects a flat list of entities inheriting from GdObject. `c` will create this under the modification described. `list` would generate a nested list structure, so that the components corresponding to DTL would be seen as a list, violating the `plotTracks` specification. `lapply` is not relevant, although it would be possible to use `do.call` to solve the problem as well.
+You can see a modification of `esrraScan` incorporating these changes in the ph525x multScan function.
+

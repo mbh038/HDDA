@@ -1,0 +1,55 @@
+---
+title: "Reference Genomes"
+author: "Michael Hunt"
+date: "April 10, 2016"
+output: html_document
+---
+
+### Reference genome discovery
+
+How many Bioconductor packages provide reference genomic sequence for `zebrafish` (_Danio rerio_)? Exclude the packages with `suffix .masked`, that we will discuss later.:
+
+
+```{r}
+library(Biostrings)
+available.genomes()
+grep("mask", grep("Drerio", available.genomes(), value=TRUE), invert=TRUE, value=TRUE) # exclude masked
+```
+
+### Masking structures for genome gaps and repetitions
+
+We have noted that the reference genome builds for complex organisms are works in progress. Genomic sequence "mask" structures have been defined to isolate ambiguous, unmappable, and low-complexity segments of genomes so that sequence analysis research can be targeted to reflect current knowledge of sequence regions that are more likely to be functionally informative.
+
+Obtain BSgenome.Hsapiens.UCSC.hg19.masked (it is only a 20MB transfer.)
+
+Run the commands
+
+```{r}
+library(BSgenome.Hsapiens.UCSC.hg19.masked)
+c17m = BSgenome.Hsapiens.UCSC.hg19.masked$chr17
+```
+What is the class of c17m?
+
+```{r}
+class(c17m)
+```
+
+### Quantifying assembly gaps
+
+
+When we print out the value of a MaskedDNAString we get a report on types of mask present. Part of the report for chromosome 17 in hg19 is:
+
+`
+    81195210-letter "MaskedDNAString" instance (# for masking)  
+seq: AAGCTTCTCACCCTGTTCCTGCATAGATAATTGCAT...GTGGGTGTGGGTGTGGTGTGTGGGTGTGGGTGTGGT  
+masks:  
+  maskedwidth maskedratio active names                               desc  
+1     3400000  0.04187439   TRUE AGAPS                      assembly gaps  
+...  
+`
+In build hg19, what percentage of the length of chromosome 22 is occupied by "assembly gaps"? Reply with an integer between 0 and 100.
+
+```{r chr 22}
+c22m = BSgenome.Hsapiens.UCSC.hg19.masked$chr22
+round(100*sum(width(masks(c22m)$AGAPS))/length(c22m),0)
+```

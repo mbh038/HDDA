@@ -1,0 +1,138 @@
+---
+title: "Rafa video on genes as genomic ranges"
+author: "Michael Hunt"
+date: "April 10, 2016"
+output: html_document
+---
+
+## Rafa video on genes as granges
+
+### Mapping genes to binding sites
+
+```{r,message=FALSE}
+library(GenomicFeatures)
+library(GenomicRanges)
+library(IRanges)
+library(ERBS)
+```
+Load reported binding sites for two diferent cell lines. These are two GRanges
+```{r}
+data(HepG2) # cell line of liver origin
+data(GM12878) # immortalized B cell
+```
+```{r}
+#browseVignettes("GenomicRanges")
+```
+Now we want to find only the regions reported to be binding sites that are common to both GRanges
+
+```{r}
+res<-findOverlaps(HepG2,GM12878)
+res
+class(res) # a Hit, not a data frame
+index<-queryHits(res)
+erbs<-HepG2[index,]
+erbs<-granges(erbs) # extracts just the regions info.
+erbs
+```
+So now we have picked out from HepG2 only those ranges that match a range in G12878 (match or overlap??)
+
+Now load up some gene information.
+
+```{r,message=FALSE}
+library(Homo.sapiens)
+```
+
+extract genes from this
+
+```{r}
+ghs=genes(Homo.sapiens)
+ghs
+```
+Get series of ids, locations, start and end, and strand + or -. Direction of transcription is different for each strand.
+For + strand, transcription start is at left, lowest number
+For - strand, transcription start is at right, highest number
+
+### use of `precede`
+
+erbs - these are locations where a protein binds to the genome. And the idea here is that some of these proteins that we study are transcription factors, that they bind _in front_ of where the gene starts, and that helps the gene expression occur. So we're really interested in-- we're many times more interested in sites that are _ahead_ of the transcription start site, but that means different things depending on if you're plus or minus.
+
+So one of the advantages of using genomic ranges is that it has all these tools that already recognize that.
+
+```{r precede}
+#?precede
+```
+`precede(query,subject)` will find entry in `query` that is nearest to subject, but only when in front of it, taking account of strand direction. This is of interest when we study transcription factors.
+
+```{r}
+index=precede(erbs,ghs,ignore.strand=FALSE)
+index
+```
+`index` is a vector of indices that tells us, for each entry in erbs, what is the entry in ghs that is closest to it but precedes it.
+
+```{r}
+ghs[index[1:3]] # Rafa got a different first gene.
+erbs[1:3]
+```
+Problem here? precede should have recognised that chr2 was on - strand and returned a larger start site number in ghs
+
+### Find distances
+
+```{r distance}
+distance(erbs,ghs[index])
+```
+
+Now define distance differently. For each binding site, find transcription start site that is closest, taking strand into accout. UIse `resize`
+
+```{r resize}
+tssgr<-resize(ghs,1)
+d<-distanceToNearest(erbs,tssgr)
+```
+d is a Hits object, so cannot subset like a matrix.
+
+```{r}
+queryHits(d)
+dists<-values(d)$distance
+hist(dists,nc=1000,xlim=c(0,100000))
+```
+We see that many of the bindng sites are very close to the transcription start sites -> biology insights
+
+### Closerlook at the genes close to the transcription start sites
+
+let's find those that are very close - less than 1000 sites away from binding sites
+
+```{r}
+index=subjectHits(d)[dists<1000]
+index
+```
+
+###  Annotating genes
+
+Use `select` function to query the Homo.sapiens data base.
+
+This will need a key. Get the key from here:
+
+```{r}
+tssgr[index,]
+keys<-as.character(values(tssgr[index])$GENEID)
+```
+We can use GENEID as key, since it is one of the avialable keytypes in Homo.sapiens:
+
+```{r keytypes}
+keytypes(Homo.sapiens)
+```
+Now, what columns from Homo.sapiens? What information do we want?
+
+What is available:
+```{r}
+columns(Homo.sapiens)
+```
+
+```{r}
+res=select(Homo.sapiens,keys=keys,keytype="GENEID",columns=c("SYMBOL","GENENAME"))
+res[1:2,]
+```
+second gene on the list is the gene related to the protein we are studying - > biology!
+
+
+
+

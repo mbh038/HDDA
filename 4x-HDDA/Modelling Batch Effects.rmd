@@ -1,0 +1,184 @@
+---
+title: "Modelling Batch Effects"
+author: "Michael Hunt"
+date: "April 4, 2016"
+output: html_document
+---
+
+For the dataset we have been working with, models do not help due to the almost perfect confounding. This is one reason we created the subset dataset:
+
+```{r}
+library(GSE5859Subset)
+data(GSE5859Subset)
+```
+
+Here we purposely confounded month and group (sex) but not completely:
+
+```{r}
+sex = sampleInfo$group
+month = factor( format(sampleInfo$date,"%m"))
+table( sampleInfo$group, month)
+```
+### Modeling Batch Effects Exercises #1
+
+Using the functions `rowttests` and `qvalue` compare the two groups, in this case males and females so coded in sex. Because this is a smaller dataset, which decreases our power, we will use a more lenient FDR cut-off of 10%.
+
+How many gene have q-values less than 0.1?
+
+```{r}
+library(qvalue)
+library(genefilter)
+sex = factor( sex)
+pval = rowttests(geneExpression, sex)$p.value
+qval = qvalue(pval)
+sum(qval$qvalue < 0.1)
+```
+### Modeling Batch Effects Exercises #2
+
+Note that sampleInfo$group here represents males and females. Thus we expect differences to be on chrY and, for genes that escape inactivation, chrX. Note that we do not expect many autosomal genes to be different between males and females. This gives us an opportunity to evaluate false and true positives with experimental data. For example, we evaluate results using the proportion genes of the list that are on chrX or chrY.
+
+For the list of genes with q<0.1 calculated in Modeling Batch Effects Exercises #1, what proportion of genes are on chrX or chrY?
+
+```{r}
+library(qvalue)
+library(genefilter)
+sex = factor( sex)
+pval = rowttests(geneExpression, sex)$p.value
+qval = qvalue(pval)
+qvals = qval$qvalues
+index = geneAnnotation$CHR[qvals<0.1]%in%c("chrX","chrY")
+mean(index)
+```
+
+### Modeling Batch Effects Exercises #3
+
+(1 point possible)
+Now for the autosomal genes (not on chrX and chrY) for which q-value < 0.1 perform a t-test comparing samples processed in June to those processed in October.
+
+What proportion of these have p-values < 0.05?
+
+
+```{r}
+library(qvalue)
+library(genefilter)
+sex = factor( sex)
+pval = rowttests(geneExpression, sex)$p.value
+qval = qvalue(pval)
+qvals = qval$qvalues
+index = which(qvals<0.1 & !geneAnnotation$CHR%in%c("chrX","chrY"))
+month = factor( format(sampleInfo$date,"%m"))
+pval = rowttests(geneExpression[index,], month)$p.value
+mean(pval<0.05)
+```
+
+### Modeling Batch Effects Exercises #4
+
+The above result shows that the great majority of the autosomal genes show differences due to processing data. This provides further evidence that confounding is resulting in false positives. So we are going to try to model the month effect to better estimate the sex effect. We are going to use a linear model:
+
+Which of the following creates the appropriate design matrix?
+
+Answer:  
+`X = model.matrix(~sex+month)`
+
+### Modeling Batch Effects Exercises #5
+
+Now use the X defined above to fit a regression model using lm for each gene. Note that you can obtain p-values for estimated parameters using summary. Here is an example:
+
+```{r}
+X = model.matrix(~sex+month)
+i = 234
+y = geneExpression[i,]
+fit = lm(y~X-1)
+summary(fit)$coef
+```
+How many of the q-values for the group comparison are <0.1 now?  
+
+```{r}
+X = model.matrix(~sex+month)
+
+pvals <- t( sapply(1:nrow(geneExpression),function(j){
+  y <- geneExpression[j,]
+  fit <- lm(y~X-1)
+  summary(fit)$coef[2,4] # the 2 picks out the second (sex) coef, the 4 picks out the p value
+} ) )
+
+library(qvalue)
+library(genefilter)
+qval = qvalue(pvals)
+qvals = qval$qvalues
+sum(qvals<0.1)
+```
+Note the big drop from what we obtained without the correction.
+
+This can be done faster using `limma` and `lmFit`:
+
+In the code above the design matrix does not change within the iterations we are computing $(X'X)^{-1}$ over and over and applying it to each gene. Instead we can perform this calculation in one matrix algebra calculation by computing it once and then obtaining all the betas by multiplying $(X^\top X)^{-1}X'Y$ with the columns of $Y$ representing genes in this case. The `limma` package has an implementation of this idea (using the QR decomposition). Note how much faster this is:
+
+```{r}
+library(limma)
+X <- model.matrix(~sex+month)
+fit <- lmFit(geneExpression,X)
+k <- 2 ##second coef, for sex
+ses <- fit$stdev.unscaled[,k]*fit$sigma
+ttest <- fit$coef[,k]/ses
+pvals <- 2*pt(-abs(ttest),fit$df)
+
+library(qvalue)
+library(genefilter)
+qval = qvalue(pvals)
+qvals = qval$qvalues
+sum(qvals<0.1)
+```
+
+### Modeling Batch Effects Exercises #6
+
+With this new list, what proportion of these are chrX and chrY?
+
+```{r}
+index = geneAnnotation$CHR[qvals<0.1]%in%c("chrX","chrY")
+mean(index)
+```
+Note the big improvement.
+
+
+### Modeling Batch Effects Exercises #7
+
+Now, from the linear model in Modeling Batch Effects Exercises #6, extract the p-values related to the coefficient representing the October versus June differences using the same linear model.
+
+How many of the q-values for the month comparison are < 0.1 now?
+
+tha fast way, using `limma`...   
+
+```{r}
+library(limma)
+X <- model.matrix(~sex+month)
+fit <- lmFit(geneExpression,X)
+k <- 3 ##third coef, for month
+ses <- fit$stdev.unscaled[,k]*fit$sigma
+ttest <- fit$coef[,k]/ses
+pvals <- 2*pt(-abs(ttest),fit$df)
+
+library(qvalue)
+library(genefilter)
+qval = qvalue(pvals)
+qvals = qval$qvalues
+sum(qvals<0.1)
+```
+the slow way...
+
+```{r}
+X = model.matrix(~sex+month)
+
+pvals <- t( sapply(1:nrow(geneExpression),function(j){
+  y <- geneExpression[j,]
+  fit <- lm(y~X-1)
+  summary(fit)$coef[3,4] # third coef, for month
+} ) )
+
+library(qvalue)
+library(genefilter)
+qval = qvalue(pvals)
+qvals = qval$qvalues
+sum(qvals<0.1)
+```
+Note that this approach is basically the approach implemented by Combat.

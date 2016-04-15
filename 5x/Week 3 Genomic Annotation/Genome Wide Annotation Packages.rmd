@@ -1,0 +1,172 @@
+---
+title: "Genome Wide Annotation Packages"
+author: "Michael Hunt"
+date: "April 11, 2016"
+output: html_document
+---
+
+### Genome Wide Annotation Packages
+
+```{r}
+library(org.Hs.eg.db)
+class(org.Hs.eg.db)
+org.Hs.eg.db
+```
+`org.Hs.eg.db` is really a mapping from ENTREZ gene identifiers to a variety of other resource tags.
+
+```{r}
+keytypes(org.Hs.eg.db)
+```
+Can use the `select()` function with any one of these identifiers as key and get out some results of querying for entities in the columns set
+
+```{r}
+columns(org.Hs.eg.db)
+```
+If I know the name of the gene, and I'd like to see what PubMed identifiers
+ENTREZ has linked to that gene, I can do it using a `select()` statement.
+
+```{r}
+genename="ORMDL3"
+select(org.Hs.eg.db,keys=genename,keytype="SYMBOL",columns="PMID")
+```
+Gives a list of PubMed ids in which something is said about this gene
+
+Try it with Homo.sapiens
+
+```{r,message=FALSE}
+library(Homo.sapiens)
+keytypes(Homo.sapiens)
+columns(Homo.sapiens)
+```
+different (more) information...
+```{r}
+genename="ORMDL3"
+select(Homo.sapiens,keys=genename,keytype="SYMBOL",columns=c("GO","TERM"))
+```
+
+note the Ontology column
+
+### Gene Ontology Tables
+
+[Book chapter](http://genomicsclass.github.io/book/pages/bioc1_annoOverview.html#gene-ontology)
+
+Gene Ontology: a structured vocabulary about genes and gene products that's been defined in an organism-independent way.
+
+And really what's in gene ontology are the terms, for example, _protein binding_, which is a molecular function MF, _endoplasmic reticulum_
+or _endoplasmic reticulum membrane_, which are cellular components CC,
+or biological processes BP. Here's a name of one of those, ceramide metabolic process.
+
+Gene ontology is a way of structuring these terms so that we have verbal characterization of aspects of gene function, gene product.
+
+The mapping from genes to terms is a distinct project. It is called __GO annotation__, and there are evidence codes that tell us what was used to make the link between ORMDL3 in this case and endoplasmic reticulum. 
+
+IDA - This is called inferred from direct annotation.  
+IEA - means inferred from electronic annotation.
+IMP - means inferred from mutant phenotype.  
+
+So there is a lot going on when I try to annotate a gene to some biological process or molecular function. And there are different types of evidence that can play a role in those attributions.  
+
+We can get a lot of information about gene ontology
+looking at the `GO.db` package.
+
+```{r GO.db}
+library(GO.db)
+GO.db
+```
+It also works with the `select` method. But underlying it is a SQLite database, and in the notes for this section of the unit, I go into how those of you who are interested in doing SQLite queries can have a look at the structures that define the relationships among the terms.
+
+So very briefly, once I've got this package in place, I can say con=GO_dbconn.
+
+```{r}
+con=GO_dbconn()
+```
+This makes a database connection, and then we can list the tables in the database and see that they refer to ontology-specific relationships
+between terms.
+
+```{r}
+library(DBI)
+dbListTables(con)
+```
+So a given term may have offspring. It may have parents. And that's what allows us to make the hierarchy that makes gene ontology such a useful structure for annotating gene structure and function.
+
+### Kyoto Encyclopedia of Genes and Genomes (KEGG)
+
+[Book chapter](http://genomicsclass.github.io/book/pages/bioc1_annoOverview.html#kegg-kyoto-encyclopedia-of-genes-and-genomes)
+
+Gene ontology can be used to group genes because they share a label-- a label about the cellular component they live in, molecular functions they participate in.
+
+KEGG-- the Kyoto Encyclopedia of Genes and Genomes-- is a rather different way of grouping genes. It specifies pathways and pathway relationships among genes.
+
+Let us look at a pathway. `hsa01212` is a tag that corresponds to an intersting one.
+
+```{r}
+library(KEGGREST)
+library(png)
+library(grid)
+brpng=keggGet("hsa01212","image")
+grid.raster(brpng)
+```
+This gives a visual display of the pathways involved.
+
+Other KEGGREST functions give similar info in different forms.
+
+### More on the Homo.sapiens package  
+
+```{r}
+class(Homo.sapiens)
+keytypes(Homo.sapiens)
+columns(Homo.sapiens)
+```
+look at the class structure:
+
+```{r}
+getClass("OrganismDb")
+Homo.sapiens@keys
+```
+
+See that "GO.db","org.Hs.eg.db" and "TxDb.Hsapiens.UCSC.hg19.knownGene" are the three entities that allow us to resolve queries.
+
+## Assessment
+
+### Enumerating genes where ER binds at TSS
+
+We'll start out by generating the addresses of all genes for Homo sapiens, and then acquire the ER binding sites in liver cells.
+
+```{r}
+library(Homo.sapiens)
+g = genes(Homo.sapiens)
+library(ERBS)
+data(HepG2)
+```
+Interpret the following computation:
+
+```{r,message=FALSE}
+library(rafalib)
+library(ph525x)
+kp = g[resize(g,1) %over% HepG2]
+class(kp)
+plotRanges(kp)
+```
+kp is the set of ranges of genes that overlap some ER binding site  
+kp is the set of SNPs in HepG2 binding sites.  
+kp is the set of genes whose transcription start site lies in a HepG2 binding site.  --  correct  
+kp is an empty set  
+
+Answer:  
+resize(g,1) is a strand-respecting reduction of the gene interval to a single base representing the transcription start site  
+
+### Creating and filtering an HTML5 report on gene annotation   
+
+The DT package provides very nice interactive tabulation. We'll generate a data.frame and publish it to the browser.
+
+```{r,message=FALSE}
+nn = names(kp)
+m = select(Homo.sapiens, keys=nn, keytype="ENTREZID",
+ columns=c("SYMBOL", "GENENAME", "TERM", "GO"))
+library(DT)
+datatable(m)
+```
+   
+datatable() will open a browser page with the table; use the search facility. How many entries mention apoptosis?: 31
+
+You enter the string in the search box and look at the bottom of the page which tells how many entries are found.
