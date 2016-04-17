@@ -7,7 +7,7 @@ output: html_document
 
 ```{r}
 library(BiocInstaller)
-biocLite("ERBS")
+# biocLite("ERBS")
 ```
 
 Book page: [Visualizung NGS data](http://genomicsclass.github.io/book/pages/bioc2_vizNGS.html)
@@ -19,8 +19,20 @@ A higher resolution view of the ESRRA binding events is available in the bigWig 
 Obtain the h2bw.rda from the URL http://bcfoundbucket.s3.amazonaws.com/h2bw.rda
 
 ```{r}
+rm(list=ls())
 library(GenomicRanges)
+library(Homo.sapiens)
 load("h2bw.rda") # 200 Mb!
+```
+
+```{r}
+sn<-seqnames(h2bw)
+rg<-ranges(h2bw)
+str<-strand(h2bw)
+#sc<-score(h2bw)
+rm(h2bw)
+h2s<-GRanges(seqnames=sn,ranges=rg,strand=str)
+rm(sn,rg,str)
 ```
 Note that the output in bigWig presents much smaller genomic intervals than the narrowPeak data. We now have the coverage of ChIP-seq reads at each location in the genome which passed some minimal threshold (not the same as "peaks" as we will see below). If the coverage is identical at adjacent basepairs, then the region will be as wide as possible. The coverage information is present in the 'score' metadata column.
 
@@ -29,7 +41,7 @@ Note that the output in bigWig presents much smaller genomic intervals than the 
 What is the median width in bases of ranges in h2bw?
 
 ```{r}
-median(width(h2bw))
+median(width(h2s))
 ```
 
 ### BigWig scores in narrow peaks
@@ -41,8 +53,195 @@ We can compare the bigWig intervals to the reported peaks.
 # if you don't have ERBS: install_github("genomicsclass/ERBS")
 library(ERBS) 
 data(HepG2)
-fo = findOverlaps(h2bw, HepG2)
+fo = findOverlaps(h2s, HepG2)
 inpeak = queryHits(fo)
+rm(h2s)
 ```
   
-What is the median score for the h2bw bigWig data in regions identified as peaks in HepG2?
+### What is the median score for the h2bw bigWig data in regions identified as peaks in HepG2?
+
+```{r}
+#rm(h2s)
+library(GenomicRanges)
+load("h2bw.rda")
+sc=score(h2bw)
+rm(h2bw)
+```
+
+```{r}
+sum(duplicated(inpeak))
+## no duplicated indices here, so:
+median(sc[ inpeak ])
+#median(sc[inpeak])
+```
+
+### BigWig scores outside narrow peaks
+
+What is the median score for the h2bw bigWig data in regions NOT identified as peaks in HepG2?
+
+```{r}
+median(sc[-inpeak])
+rm(sc)
+```
+
+### The BigWIg scores near ESRRA
+
+Find the location of gene with the SYMBOL 'ESRRA' in hg19 (hint: 'TXCHROM' and 'TXSTART' columns in Homo.sapiens, use the smallest TXSTART returned), and the narrowPeak range that includes it in HepG2. Obtain the scores from h2bw that lie in this peak. What is the maximum score in this peak region?
+
+```{r} 
+library(GenomicRanges)
+library(Homo.sapiens)
+library(ERBS) 
+data(HepG2)
+
+eid = select(Homo.sapiens, keys = "ESRRA", keytype = "SYMBOL",columns = c("TXCHROM","TXSTART"))
+narrind<-queryHits(findOverlaps(HepG2,GRanges(eid$TXCHROM[1], IRanges(eid$TXSTART[1], width=1))))
+bwind = queryHits(fo)[ subjectHits(fo)==narrind]
+load("h2bw.rda") # 200 Mb!
+max( h2bw$score[ bwind ] )
+```
+
+
+### Plotting coverage and locating extremes
+
+We have now found the coverage of the ChIP-seq peak nearest to the ESRRA gene. We can write this as:
+
+```{r}
+peakcov = h2bw[ queryHits(fo)[subjectHits(fo) == narrind] ]
+```
+We can plot the coverage vs the middle point of each range:
+
+```{r}
+plot( 0.5*( start(peakcov) + end(peakcov) ), peakcov$score)
+```
+
+From the information in 'peakcov', what is the location of the basepair with the highest coverage?
+
+```{r}
+start(peakcov[which.max(score(peakcov))])
+# or
+peakcov[ which.max(peakcov$score) ]
+```
+Note that this information (just the location of the highest peak, not the coverage details) is annotated in the narrowPeak file. The "peak" column of HepG2 annotates the location of the highest coverage relative to the leftmost point of the range:
+
+```{r}
+start(HepG2[narrind]) + HepG2[narrind]$peak
+```
+
+### A quick look at Sushi
+
+The Sushi package targets the development of multipanel figures for integrative genomics. We will examine it somewhat critically in these exercises. Use biocLite("Sushi") to install if not already present.
+
+```{r}
+biocLite("Sushi")
+```
+
+The package provides a number of useful example files. One is Sushi_ChIPSeq_severalfactors.bed
+
+Install the sushi package and load the Sushi_ChIPSeq_severalfactors.bed example data with data(...).
+
+```{r}
+library(Sushi)
+data(Sushi_ChIPSeq_severalfactors.bed)
+#sdat<-Sushi_ChIPSeq_severalfactors.bed
+#rm(Sushi_ChIPSeq_severalfactors.bed)
+```
+
+What is the reference build on which the coordinates of Sushi_ChIPSeq_severalfactors.bed are based?
+
+ hg19  
+ hg18  -- correct
+ it cannot be determined from the data  
+ hg38
+ 
+Answer:  
+use ?Sushi_ChIPSeq_severalfactors.bed after loading the package
+
+
+### Running a plotBed example
+
+One of the examples in the plotBed man page is
+
+```{r}
+ chrom            = "chr15"
+ chromstart      = 72800000
+ chromend         = 73100000
+ plotBed(beddata = Sushi_ChIPSeq_severalfactors.bed,
+      chrom = chrom,chromstart = chromstart,chromend =chromend,
+      rownumber  = Sushi_ChIPSeq_severalfactors.bed$row, 
+      type = "region", color=Sushi_ChIPSeq_severalfactors.bed$color, row="given", plotbg="grey95", 
+      rowlabels=unique(Sushi_ChIPSeq_severalfactors.bed$name),
+      rowlabelcol=unique(Sushi_ChIPSeq_severalfactors.bed$color),rowlabelcex=0.75)
+```
+How many bars do you see associated with EP300?
+Answer: 
+
+From the plot, 4.
+
+Or, we could do
+
+```{r}
+table(Sushi_ChIPSeq_severalfactors.bed$name)
+```
+
+which gives the exact numbers.
+
+### Choosing a representation for genome-scale data
+
+The Sushi_ChIPSeq_severalfactors.bed data are provided in a data.frame instance.
+
+```{r}
+data(Sushi_ChIPSeq_severalfactors.bed)
+```
+What are some desirable characteristics of genomic data representations available in Bioconductor? Check all that apply.
+ 
+*Self-describing: reference genome build and its associated chromosome lengths can be bound directly into GRanges and associated classes   
+* Efficient representation for repetitive annotation: run-length encodings can be adopted for any data or metadata on genomic coordinates   
+* Powerful infrastructure for computing overlaps and coincidences among features annotated to genomic regions: findOverlaps, subsetByOverlaps   
+* Explicit support for representation of relationships among genomic features: chromosomes, genes, transcripts, exons, efficiently extracted from external databases   
+* Support for arbitrary metadata at the range or range-set level using metadata() and mcols() 
+
+Answer:  
+All of the above. See  
+http://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1003118   for more details
+
+
+### Converting the bed-like data to GRanges
+
+Consider the following transformations:
+
+```{r}
+ss = Sushi_ChIPSeq_severalfactors.bed  # abbreviate
+library(GenomicRanges)
+k562gr = GRanges(ss$chrom, IRanges(ss$start, ss$end))
+k562grl = split(k562gr, ss$name) # listed, by name
+```
+
+How many distinct regions of the genome as excerpted in this data are identified as bound by any factor? (Hint: use reduce()).
+
+```{r}
+length(reduce(k562gr))
+```
+
+### The Gviz approach to the multiple factor binding display
+
+Load the Gviz package and run
+
+```{r}
+library(Gviz)
+plotTracks(lapply(k562grl, AnnotationTrack))
+```
+
+Check the following changes that are needed to better approach the bedPlot display:
+
+ Add names to panels indicating the factor depicted  
+ Achieve balance in vertical space consumed by each factor by applying
+ 
+Answer:  
+Both!
+
+Try:
+
+```{r}
+plotTracks(lapply(1:length(k562grl), function(i) AnnotationTrack(reduce(k562grl[[i]]), name=names(k562grl)[i])))
+```
