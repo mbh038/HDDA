@@ -1,0 +1,116 @@
+---
+title: "Shiny for gene expression clustering"
+author: "Michael Hunt"
+date: "April 17, 2016"
+output: html_document
+---
+
+Setup of the expression data and app
+
+(1 point possible)
+Let's set up the tissue gene expression data as in the previous video/chapter:
+
+```{r}
+library(Biobase)
+library(hgu133a.db)
+library(ph525x)
+
+esHclust = function(es) {
+  emat = t(exprs(es))
+  rownames(emat) = sampleNames(es)
+  dd = data.frame(emat)
+  dfHclust(dd)
+}
+
+library(tissuesGeneExpression)
+data(tissuesGeneExpression)
+tgeES = ExpressionSet(e)
+annotation(tgeES) = "hgu133a.db"
+pData(tgeES) = tab
+featureNames(tgeES) =
+  make.names(mapIds(hgu133a.db, keys=featureNames(tgeES),
+    keytype="PROBEID", column="SYMBOL"), unique=TRUE)
+sampleNames(tgeES) = make.names(tgeES$Tissue, unique=TRUE)
+```
+How many of the feature names of tgeES are missing (NA)?
+
+```{r}
+sum(is.na(featureNames(tgeES)))
+```
+The originating data are limited to probes with gene identifiers. The make.names call ensures that duplicates get unique suffixes of the form .[n].
+
+### Verifying initial configuration
+
+Run 
+
+```{r}
+esHclust(tgeES[1:50,1:50])
+```
+
+Set the cutoff height to 2.
+
+What is the average silhouette value for this clustering/partition? (Look at the silh tab after changing the cutoff value).
+
+Answer:  
+0.43
+
+```{r}
+ex = exprs(tgeES[1:50,1:50])
+h = hclust(dist(t(ex[1:2,])), method="ward.D")
+cc = cutree(h, h=2)
+summary(silhouette(cc, dist(t(ex[1:2,]))))
+```
+
+### The 50-gene signature for tissue differentiation
+
+Instead of using the first 50 genes, exploit the ExpressionSet interface to make a targeted investigation. We used limma to identify 50 genes for which a null hypothesis of common mean expression across tissues is rejected. The gene set is identified via
+
+```{r}
+library(limma)
+mm = model.matrix(~Tissue, data=pData(tgeES))
+f1 = lmFit(tgeES, mm)
+ef1 = eBayes(f1)
+sig50 = rownames(ef1$coef[order(ef1$F,decreasing=TRUE)[1:50],])
+```
+
+Now we can run
+
+```{r}
+esHclust( tgeES[sig50,] )
+```
+Set the height for cut to 2. 
+The average silhouette for the top 2 genes, Euclidean distance, and ward.D clustering is 0.35.
+
+How many clusters are formed by cutting the tree at 2?
+
+Answer:  
+7
+
+### Genes ranked 49th and 50th
+
+Scroll to the bottom of the feature list and check the bottom two genes: EEF1G.2 and KLRC4. Then uncheck the top two genes RPL37A and RPL41. Change the clustering method to ward.D2
+
+What is the average silhouette value for the clustering based on these choices?
+
+Answer:  
+0.55  
+```{r}
+ex = exprs(tgeES[sig50,])
+h = hclust(dist(t(ex[49:50,])), method="ward.D2")
+cc = cutree(h, h=2)
+summary(silhouette(cc, dist(t(ex[49:50,]))))
+```  
+
+### Random forests for the 5 gene signature
+
+In the book chapter we showed how the random forests algorithm could be used to assess the set of 50 genes with greatest F values for discriminating tissue-specific means. Try it with the 5 gene signature:
+
+```{r}
+sig5 = c("IL26", "ZNF674", "UBC.1", "C7orf25.1", "RPS13")
+library(MLInterfaces)
+library(randomForest)
+set.seed(1234)
+rf2 = MLearn(Tissue~., tgeES[sig5,], randomForestI, xvalSpec("NOTEST"))
+RObject(rf2)
+```
+In percent, what is the out of bag estimate of the misclassification error rate?

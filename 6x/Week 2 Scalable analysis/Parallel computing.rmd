@@ -1,0 +1,102 @@
+---
+title: "Parallel computing"
+author: "Michael Hunt"
+date: "April 18, 2016"
+output: html_document
+---
+
+[Book chapter](http://genomicsclass.github.io/book/pages/bioc2_parallel.html)
+
+[Book chapter](http://genomicsclass.github.io/book/pages/bioc2_HPCami.html)
+
+### Estimating speedups
+
+Suppose you have a system for which options(mc.cores=8) is valid and meaningful.
+What is the expected number of seconds of wall clock time for 
+
+```{r}
+system.time( mclapply(1:32, function(x) Sys.sleep(1) ) )
+```
+after setting the mc.cores to 8? Note that you are not expected to run this code, but to reason about the potential speedup for the described system.
+
+Answer: 4
+
+```{r}
+library(parallel)
+detectCores()
+```
+[1] 64
+
+```{r}
+ options(mc.cores=8)
+ system.time( mclapply(1:32, function(x) Sys.sleep(1) ) )
+```
+   user  system elapsed
+  0.014   0.029   4.020
+  
+
+### bplapply with a straggler or two
+
+Suppose we have a system with at least 15 cores and we use
+
+```{r}
+library(BiocParallel)
+register(MulticoreParam(workers=15))
+system.time( bplapply(1:32, function(x) Sys.sleep(1) ) )
+```
+    
+What is the expected wall clock time?:
+
+Answer: 3  
+There are 32 jobs. The first 15 will run concurrently in about a second, so will the second 15, but two stragglers will not begin until the second second ends.
+
+
+### Distributed alignment retrieval with BatchJobs
+
+A major problem in large-scale data analysis is the need to manage fragments of piecewise analyses. The decomposition of the workflow may be needed to respect memory limits or other boundaries. The MapReduce framework, particularly the Reduce part, helps impose order on the workflow and assembly of a coherent output. The BatchJobs package helps with this and this exercise demonstrates some of the salient components, without requiring that you have distributed or multicore computing.
+
+```{r}
+library(BatchJobs)  # sequential by default
+reg1 = makeRegistry("tmp1", packages=c("RNAseqData.HNRNPC.bam.chr14", "GenomicAlignments", "Rsamtools"))
+library(RNAseqData.HNRNPC.bam.chr14)
+fns = RNAseqData.HNRNPC.bam.chr14_BAMFILES
+batchMap(reg1, readGAlignments, fns)
+submitJobs(reg1, 1)
+waitForJobs(reg1)
+```
+  
+What is value of length(loadResult(reg1, 1))?:
+
+```{r}
+length(loadResult(reg1, 1))
+```
+
+### Continuation and diagnosis of resource consumption
+
+We can complete the read process
+
+```{r}
+submitJobs(reg1, findNotDone(reg1))
+waitForJobs(reg1)
+```
+    
+What is the median memory consumption (in megabytes) over the eight jobs? Use getJobInfo(reg1).:
+
+```{r}
+getJobInfo(reg1)
+median(getJobInfo(reg1)$memory)
+```
+
+### The reduction process
+
+The registry can be used to manage retrieval of function values on result sets. Here we show how to build a vector of lengths of readGAlignments. `fun` will be applied to all the job results that are available. `fun` must have formal arguments `aggr`, `job`, `res`, where `res` can be used to refer to the result of any job, and `aggr` is an accumulated set of processed results. The function defines how to iteratively reduce the result set by combining `aggr` (all previously processed and reduced results) with `res` (the current result). The argument `init` initializes `aggr`.
+
+```{r}
+lens = reduceResults( reg1, fun= function(aggr, job, res)
+    c(aggr, length(res)), init=NULL)
+``` 
+What is the total number of alignments?:
+
+```{r}
+sum(lens)
+```

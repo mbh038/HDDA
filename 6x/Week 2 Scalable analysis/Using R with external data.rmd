@@ -1,0 +1,224 @@
+---
+title: "Using R with external data"
+author: "Michael Hunt"
+date: "April 18, 2016"
+output: html_document
+---
+
+## Working with data external to R  
+
+## Packages that provide access to data external to R  
+
+[Book chapter](http://genomicsclass.github.io/book/pages/bioc2_externData.html)
+[Book chapter](http://genomicsclass.github.io/book/pages/bioc2_externData.html#hdf5)
+[book chapter](http://genomicsclass.github.io/book/pages/multiOOM.html)
+
+## SQLite as the back end  
+
+```{r}
+library(GO.db)
+GO.db
+keytypes(GO.db)
+columns(GO.db) # in this case the same as the keytypes
+getClass(class(GO.db))
+```
+
+get a SQLite connection
+
+```{r}
+con=GO.db$conn
+con
+```
+
+```{r}
+library(DBI)
+library(RSQLite)
+dbListTables(con)
+```
+now use SQL to query any table in GO.db
+
+```{r}
+dbGetQuery(con,"select * from go_term limit 5")
+```
+
+The dbGetQuery function will return a data.frame instance. Why don't we just manage the annotation as a data.frame? There are several reasons. First, for very large data tables, just loading the data into an R session can be time consuming and interferes with interactivity. Second, SQLite includes considerable infrastructure that optimizes query resolution, particularly when multiple tables are being joined. It is better to capitalize on that investment than to add tools for query optimization to the R language.
+
+Fortunately, if you are not interested in direct interaction with the RDBMS, you can pretend it is not there, and just work with the high-level R annotation functions that we have described.
+
+### Simple SQL query with GO.db
+
+You must use version 3.2.2 of GO.db package. This can be checked using packageVersion("GO.db").
+
+A direct connection to the database underlying GO.db can be obtained via
+
+```{r}
+library(GO.db)
+con = GO.db$conn 
+```
+After issuing the R command
+
+```{r}
+dbGetQuery(con, "select count(*) from go_term")
+```
+    
+What is the the number of terms reported?: 41790
+
+
+### Benchmarking SQL vs. select()
+
+
+We will use a benchmarking tool to compute statistics on runtimes of two approaches to extracting annotation information: direct use of SQL vs. the select interface. For interactive work there is no real need to optimize query resolution, but for designing servers such computations are very important. Be sure the microbenchmark package is installed. Use the code
+
+```{r}
+library(microbenchmark)
+m1 = microbenchmark(
+ dbGetQuery(GO.db$conn, "select term from go_term"), times=10L, unit="ms")
+m2 = microbenchmark(
+ keys(GO.db, keytype="TERM"), times=10L, unit="ms")
+```
+
+What is the ratio of median time to acquire all terms through keys() to median time to acquire all terms via SQL?:
+
+```{r}
+median(m2$time)/median(m1$time)
+# or
+summary(m2)[,"median"]/summary(m1)[,"median"]
+```
+
+## Tabix-indexed text or BAM as the back end
+
+### Working with Tabix-indexed BAM
+
+Could a region of DNA be a binding site for a regulatory protein and also be transcribed to mRNA? Use ERBS package GM12878 ranges as a ScanBamParam for reading alignments from the hnRNP C RNA-seq study.
+
+  
+```{r}
+library(RNAseqData.HNRNPC.bam.chr14)
+library(GenomicAlignments)
+library(ERBS)
+data(GM12878)
+seqlevels(GM12878, force=TRUE) = "chr14"
+library(Rsamtools)
+parm = ScanBamParam(which=GM12878)
+tab = summarizeOverlaps( GM12878, RNAseqData.HNRNPC.bam.chr14_BAMFILES,
+    param=parm)  
+```
+
+How many of the regions of ESRRA binding peaks are apparently not subject to transcription in either HeLa cells or HeLa cells subject to hnRNP C knockdown, in the sense that all samples register 0 aligned reads in these regions?:
+
+```{r}
+regions=1:51
+zeros<-sapply(regions, function (x) {
+    sum(assays(tab)[[1]][x,])==0
+})
+sum(zeros)
+```
+Model answer:  
+
+```{r}
+sum(apply(assay(tab),1,function(x)all(x==0)))
+```
+
+### Differential mapping qualities for assertions of rare or abundant transcription
+
+Create a ScanBamParam for the 5th region in chr14 of GM12878 and scan the reads aligning to that region in the first sample in the BAMFILES vector.
+
+  
+```{r}
+mm = ScanBamParam(which=rowRanges(tab)[5], what="mapq")
+bf = RNAseqData.HNRNPC.bam.chr14_BAMFILES
+kk = scanBam(bf[1], param=mm)
+```
+
+How many reads in this sample align here?:
+What is the mean quality score?:
+
+```{r}
+countBam(bf[1], param=mm)
+mean(kk[[1]]$mapq)
+```
+
+Repeat this process for the 30th interval.
+How many reads in this sample align here?:
+What is the mean quality score?:
+
+```{r}
+mm30 = ScanBamParam(which=rowRanges(tab)[30], what="mapq")
+bf30 = RNAseqData.HNRNPC.bam.chr14_BAMFILES
+kk30 = scanBam(bf30[1], param=mm30)
+
+countBam(bf[1], param=mm30)
+mean(kk30[[1]]$mapq)
+```
+
+### Querying Tabix-indexed VCF in an Amazon S3 bucket
+
+(1 point possible)
+Really large projects like 1000 genomes can make data publicly available using the Amazon Elastic Cloud infrastructure.
+
+The S3 (Simple Storage Service) infrastructure manages data objects in buckets, and data is accessible via various schemes including HTTP request resolution. We'll illustrate this now. [NOTE: The scanVcfHeader command can fail owing to connectivity issues or issues at the S3 end. If it fails repeatedly try again later.]
+
+
+```{r}
+library(geuvPack)
+library(VariantAnnotation)
+gtpath
+```
+Notice that the code includes a string template variable beginning
+
+
+```{r}
+"http://1000genomes.s3.amazonaws.com/release/20130502/...."
+```
+
+This variable is used to create a URL that points to the tabix-indexed VCF recording genetic variants in 1000 genomes samples. With a good internet connection, execute the following:
+
+
+```{r}
+h22 = scanVcfHeader(gtpath(22))
+```
+How many samples are described in the header?
+
+
+### Using benchOOM
+
+
+Check to see that you have the benchOOM function in your current version of ph525x package. If you do not,
+
+please update your version with biocLite("genomicsclass/ph525x"). You may have to restart your R session to
+
+see the benchOOM function.
+
+The benchOOM function gives you rapid access to various out-of-memory strategies. Run it with defaults.
+
+Windows users may need to run with administrator privileges to accomplish the file manipulations.
+
+```{r}
+library(ph525x)
+library(rhdf5)
+library(bigmemory)
+b1 = benchOOM()
+b1
+```
+Results of 5 methods are reported. Which has the smallest value in column 'wr'?
+
+Use lower case.
+
+```{r}
+b1$meth[which.min(b1$wr)]
+```
+
+Answer:  
+HDF5 consistently wins for matrix export.
+
+
+### Handling HDF5 data
+
+After you have run benchOOM() there will be a file "ex_hdf5file.h5" in the current folder. Run the code
+
+```{r}
+mean( h5read("ex_hdf5file.h5", "x", index=list(1:4,1:4)))
+```
+What is the mean value?
+
+Answer:
