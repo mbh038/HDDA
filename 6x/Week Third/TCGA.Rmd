@@ -1,0 +1,147 @@
+---
+title: "Untitled"
+author: "Michael Hunt"
+date: "20 April 2016"
+output: html_document
+---
+
+[Book chapter: Working with TCGA data: clinical, expression, mutation and methylation](http://genomicsclass.github.io/book/pages/tcga.html)
+[Book chapter: A view of genetic heterogeneity between and within cancer types](http://genomicsclass.github.io/book/pages/bioc2_rainfall.html)
+
+### F tests for association of gene expression with tumor stage
+
+(1 point possible)
+We focus on the rectal adenocarcinoma data. Run the following code to generate gene-wise FDRs for the null hypotheses Hog: mean expression of gene g is constant across groups defined by tumor T stages. The topTable reports FDRs based on the moderated F tests of these hypotheses.
+
+```{r}
+options(digits=3)
+library(ph525x)
+data(readES)
+library(limma)
+mm = model.matrix(~t_stage, data=pData(readES))
+f1 = lmFit(readES, mm)
+ef1 = eBayes(f1)
+topTable(ef1,2:4, n=20)
+```
+
+How many genes are identified as associated with tumor stage with FDR of at most 10.5 percent? (We use 10.5 to allow rounding down to 10 for a final report.)
+
+Answer :  
+9. Run the code and compare the elements in adj.P.Value to 0.105.
+
+### A test for trend in expression across tumor stages
+
+(1 point possible)
+Now reformulate the t_stage variable as a numerical score:
+
+```{r}
+readES$numts = as.numeric(factor(readES$t_stage))
+mm2 = model.matrix(~numts, data=pData(readES))
+f2 = lmFit(readES,mm2)
+ef2 = eBayes(f2)
+topTable(ef2,2, n=50)
+```
+
+Now we are using a one degree-of-freedom test for the gene-specific simple linear models, testing the null hypotheses that the slope of the regression of expression on tumor stage is zero.
+
+Now how many genes are identified as associated with stage, using an FDR threshold of 10.5 percent?
+
+Answer:  
+47. by inspection of the table adj.P.Value column
+
+### Value of the FDR threshold
+
+After setting up and answering the previous problem, examine the graphic from
+
+
+```{r}
+boxplot(exprs(readES)["COMP",]~readES$t_stage)
+```
+The FDR for COMP exceeds the threshold for FDR of 10.5 percent.
+
+Select the most reasonable interpretation of these findings.
+
+The gene COMP is not differentially expressed across tumor stages.  
+The gene COMP is probably associated with progression of rectal adenocarcinoma.  
+There is an apparent association between COMP and progression of rectal adenocarcinoma (as measured by T stage), but a list that includes it and all other genes with FDR at most 10.5 percent in this analysis would have about 10 percent false positives.  --  correct
+We cannot interpret the result without additional information.  
+
+Answer  
+Choice 4 has some appeal but the procedure that has been used with the institutionally distributed TCGA data suggests that we accept the definitional interpretation given in choice 3.
+ 
+### Rainfall plot enhancement
+
+Run the following code:
+
+```{r}
+library(ph525x)
+data(readMuts)
+par(mfrow=c(4,1), mar=c(3,4,2,2))
+rfs2 = rfs = list()
+for(i in 1:4) rfs[[i]] = rainfall(readMuts, oind=i)
+for(i in 1:4) rfs[[i]] = rainfall(readMuts, oind=i,inbw=1e6)
+```
+
+The density estimates at the bottom of each display are created using R's density() function with a
+default bandwidth setting of 1000.
+
+What will happen if we change the density bandwidth setting (parameter inbw for rainfall) to 10e6?
+
+Numerical overflow  
+The trace will get spikier  
+The trace will be smoother along the chromosomes - correct
+
+Answer:  
+Increasing the bandwidth setting leads to a less spiky, more smoothly varying density function estimate.
+
+### Identifying a gene with unusual concentration of mutations in a subject
+
+After running the code from the previous problem, run:
+
+
+```{r}
+par(mfrow=c(4,1), mar=c(3,4,2,2))
+for (i in 1:4) rfs2[[ i ]] = rainfall(readMuts, oind=i, inbw=1e7)
+```
+
+The following code isolates one individual, extracts the density estimate and the total genomic distance for each mutation, and then interpolates the density to each mutation's location using approx().
+
+```{r}
+subj1 = rfs2[[1]]
+s1den = subj1$density
+s1tgd = subj1$mutGR$totalgd
+intden1 = approx(s1den$x, s1den$y, s1tgd)$y
+topd1ind = which.max(intden1)
+subj1$mutGR[topd1ind,1:6]
+```
+
+For the first subject (depicted by the rainfall call above), what gene harbors the mutation at which the density is greatest? Use the HUGO symbol. (just run the code)
+
+### Repeat for another subject
+
+(1 point possible)
+The second element of rfs2 computed above provides mutation data on a tumor from a different subject.
+
+What gene harbors the mutation at which the mutation density is largest? Use the HUGO symbol.
+
+```{r}
+subj1 = rfs2[[2]]
+s1den = subj1$density
+s1tgd = subj1$mutGR$totalgd
+intden1 = approx(s1den$x, s1den$y, s1tgd)$y
+topd1ind = which.max(intden1)
+subj1$mutGR[topd1ind,1:6]
+```
+
+### A blemish on the rainfall function as implemented here
+
+There is a very serious problem with the rainfall algorithm implementation in ph525x. There is improper use of annotation. Note that the computation of the total genetic distance of each mutation employs seqinfo(Homo.sapiens), which currently is based on the hg19 (NCBI build 37) reference build by default.
+
+What reference build is used to give coordinates for mutations in READ TCGA data from 20150402 run? Hint: look at the first record of readMuts, out to 5 or 6 columns. Use an integer to respond, using the NCBI numbering.
+
+```{r}
+readMuts[1,1:6]
+```
+
+Answer:  
+36. This means that the chromosome lengths used to build up the total genomic distance are not appropriate. To robustify the programming against such events, the source of chromosome length data should be checked for compatibility with the mutation address data, and if the use of Homo.sapiens were not "hard wired" into rainfall(), an easy substitution of appropriate chromosome lengths would be feasible. The lesson is to verify compatibility. You might note a suppressWarnings in rainfall(), which was introduced to quiet down the code when it was observed that some ranges were out of bounds relative to hg19 chromosome lengths.

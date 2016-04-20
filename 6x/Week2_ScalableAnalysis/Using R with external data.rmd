@@ -168,20 +168,23 @@ Notice that the code includes a string template variable beginning
 
 
 ```{r}
-"http://1000genomes.s3.amazonaws.com/release/20130502/...."
+urlstem<-"http://1000genomes.s3.amazonaws.com/release/20130502/"
 ```
 
 This variable is used to create a URL that points to the tabix-indexed VCF recording genetic variants in 1000 genomes samples. With a good internet connection, execute the following:
 
 
 ```{r}
-h22 = scanVcfHeader(gtpath(22))
+h22 = scanVcfHeader(gtpath(22)) # does not work!
+f1<-substr(gtpath(22), start=nchar(urlstem)+1, stop=nchar(gtpath(22)))
+h22 = scanVcfHeader(f1)
+h22
 ```
+
 How many samples are described in the header?
 
 
 ### Using benchOOM
-
 
 Check to see that you have the benchOOM function in your current version of ph525x package. If you do not,
 

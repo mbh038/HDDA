@@ -44,5 +44,5 @@ As you work through exercises, if a Bioconductor package not found error is enco
 
 ```{r}
 library(BiocInstaller)
-biocLite("bigmemory")
+biocLite("limma")
 ```
