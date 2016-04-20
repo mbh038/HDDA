@@ -1,0 +1,107 @@
+---
+title: "Comparing transcription regulators in S. cerevisiae"
+author: "Michael Hunt"
+date: "April 18, 2016"
+output: html_document
+---
+
+Use harbChIP to display the distribution of binding scores for MCM1 over the yeast genome. Use a qqnormal display as follows:
+
+```{r}
+library(harbChIP)
+data(harbChIP)
+sv = qqnorm(exprs(harbChIP)[,"MCM1"], main="Mcm1 binding scores")
+```
+
+Superimpose five genes to which Mbp1 had high binding scores:
+
+```{r}
+topb = names(sort(exprs(harbChIP)[,"MBP1"], decreasing=TRUE)[1:5])
+points(sv$x[topb], sv$y[topb], col="red", pch=19)
+```
+How many distinct red points do you see?:
+
+Answer:  
+4. Two of the genes that are neighbors had very similar binding scores reported and are not distinguishable.
+
+### Slices of the cell cycle transcriptional cascade
+
+Plot the trajectory for the gene for which Mcm1 binding was reportedly strongest, and add to this in purple the trajectory of the gene for which Mbp1 binding was strongest.
+
+```{r}
+library(yeastCC)
+data(spYCCES)
+alp = spYCCES[, spYCCES$syncmeth=="alpha"]
+nm = names(which.max(exprs(harbChIP)[,"MCM1"]))
+nm2 = names(which.max(exprs(harbChIP)[,"MBP1"]))
+plot(exprs(alp)[nm,]~alp$time, ylab=paste0(nm, " expression"), type="l", ylim=c(-1,1))
+lines(exprs(alp)[nm2,]~alp$time, ylab=paste0(nm, " expression"),
+  col="purple")
+
+```
+How far apart in minutes are the first peaks of the genes plotted here?
+
+Answer: 
+About 30. Eyeball it. If we take the question literally we can use locator() to find that the peak in purple occurs at about 20.6 and the peak in black at about 41.8. This would be a gap of 21.2 minutes, which is within the problem solution tolerance. We would tend to pick a point in the middle of the first black "hump" suggesting a gap closer to 30 min.
+
+### Figure enhancement query
+
+What is the name of a function that will help the viewer distinguish the genes plotted in different colors on the preceding display?:
+
+Answer: 
+```{r}
+legend(40, -.5, lty=1, col=c("black", "purple"), legend=c("MCM1", "MBP1"))
+```
+
+### Peaks coinciding with GWAS hits
+
+In the video we looked at the coincidence of GWAS hits from NHGRI GWAS catalog and the ESRRA binding sites in the B cell line GM12878.
+
+```{r}
+library(ERBS)
+data(GM12878)
+library(gwascat)
+data(gwrngs19)
+fo = findOverlaps(GM12878, reduce(gwrngs19))
+length(fo)
+```
+  
+How many _distinct peaks_ include at least one GWAS hit?:
+
+```{r}
+length(unique(queryHits(fo)))
+# see also
+reduce(GM12878[queryHits(fo)])
+```
+
+### A p-value based on random repositioning
+
+GWAS hits are distributed very widely over the genome. It may be the case that any set of genomic intervals with widths comparable to those of GM12878 would overlap with as many SNP. In this case we would regard the 28 GWAS hits covered by ESRRA binding sites to be something like a chance event.
+
+The reposition function in the updated ph525x package takes a set of GRanges and repositions them to randomly selected starts on randomly selected chromosomes. By counting the number of GWAS hits covered by repositioned versions of GM12878, we get an approximate realization of the "null distribution" of this quantity.
+
+```{r}
+library(ph525x)
+library(gwascat)
+rg = reduce(gwrngs19)
+set.seed(1234)
+rsc = sapply(1:100, function(x)
+     length(findOverlaps(reposition(GM12878), rg)))
+mean(rsc > length(fo))
+```
+  
+What does this indicate as an approximate p-value for the null hypothesis: the tendency of an interval to contain a GWAS hit is unrelated to the status of the interval as an ESRRA binding site? (Please consider in your response the definition of "p-value", specifically that a value of zero is unreasonable.)
+
+```{r}
+qqnorm(rsc)
+qqline(rsc)
+sd(rsc)
+mean(rsc)
+2*(pnorm(length(fo),mean(rsc),sd(rsc),lower.tail=FALSE))
+```
+or:
+
+In one hundred realizations from the putative null distribution, no score exceeded the observed score. The probability of getting a score at least as high as the observed, under the null hypothesis, is therefore estimated to be at most 1%. This is an uncertain estimate however.
+
+
+

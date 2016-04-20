@@ -1,0 +1,132 @@
+---
+title: "siRNA knockdown in a pancreatic cancer cell line"
+author: "Michael Hunt"
+date: "April 18, 2016"
+output: html_document
+---
+
+### Data acquisition; identifying a sample by experimental characteristics
+
+GSE35463 has title "The chromatin protein Nupr1 regulates RelB-dependent NF-kB events necessary for pancreatic cancer development."
+
+NOTE: This problem requires getGEO to succceed, and there have been problems noted with connectivity. The problems seem to be at NCBI. You can see a workaround for a different dataset at
+
+ https://support.bioconductor.org/p/59287/#79563
+... please raise issues at the discussion board if you cannot make progress on this and we will provide an alternate solution.
+
+To learn about the experimental design, use
+
+```{r}
+library(GEOquery)
+pc1 = getGEO("GSE35463")[[1]]
+pc1$source_name_ch1
+```
+```{r workaround}
+pc1 = getGEO("GSE35463",getGPL=FALSE) # using one non default parameter
+pc1[[1]] # gets us the expression data
+pc1[[1]]$source_name_ch1
+```
+get the annotation data at
+
+http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GPL6244
+
+click on the Annotation SOFT table button.  Now we have
+GPL6244.annot.gz on disk.  We then use
+
+```{r}
+anno = parseGPL("C:/Users/Mike/Downloads/GPL6244.annot.gz")  # that's my download area; use yours
+```
+lots of warnings, but press on..
+
+```{r}
+getClass(class(anno))
+getClass("GEODataTable")
+dim(anno@dataTable@table)
+```
+maybe this will work
+
+```{r}
+pset = pc1[[1]]
+annotab = anno@dataTable@table
+annotab = annotab[-which(is.na(annotab[,1])),]
+rownames(annotab) = as.character(annotab[,1])
+fData(pset) = annotab[ rownames(exprs(pset)), ] 
+pset
+```
+still not there. check experimentData(eset)
+
+```{r}
+library(annotate)
+#mi = pmid2MIAME("21257922")
+```
+  
+Which of the samples represents expression after 9 hours of culturing a direct knockdown of NUPR1? Respond with a GSM-prefixed label.
+
+### Annotation for Gene 10 ST arrays
+
+One of the more modern platforms identified in our search for pancreatic cancer studies conducted in GEO is the Affy gene 1.0 ST used in GSE35463. When we acquire this, we obtain an ExpressionSet instance. Elements in the phenoData inform us that experiments used a combination of MiaPaCa2 and Panc1 cells, and that Nupr1, RelA/p65, RelB and IER3 were knocked-down using 140 ng of specific siRNAs.
+
+What is the transcript cluster id for NUPR1? Use select on hugene10sttranscriptcluster.db.:
+
+```{r}
+library(annotate)
+library(hugene10sttranscriptcluster.db)
+select(hugene10sttranscriptcluster.db,keys="NUPR1",keytype="SYMBOL",columns="PROBEID")
+```
+
+I used...
+
+```{r}
+library(annotate)
+library(hugene10sttranscriptcluster.db)
+annodb <- "hugene10sttranscriptcluster.db"
+ID     <- featureNames(pc1)
+Symbol <- as.character(lookUp(ID, annodb, "SYMBOL"))
+Name   <- as.character(lookUp(ID, annodb, "GENENAME"))
+Entrez <- as.character(lookUp(ID, annodb, "ENTREZID"))
+ID[Symbol=="NUPR1"]
+```
+
+### Determining the preprocessing method
+
+(1 point possible)
+What is a three-letter acronym for the data processing method used in developing the expression quantifications in this experiment?
+
+```{r}
+pc1[[1]]$data_processing
+```
+
+### The distribution of differences of paired NUPR1 measures
+
+Form the vector of four time-specific differences between siCtrl-treated and siNupr1-treated cultures. Use shapiro.test to assess whether there is a substantial departure from a Normal distribution for these differences.
+
+What is the p-value for the test of non-normality?:
+
+This gives the wrong answer...
+```{r}
+x=FALSE
+td0<-mean(exprs(pset)[,7],rm.na=x)-mean(exprs(pset)[,11],na.rm=x)
+td3<-mean(exprs(pset)[,8],rm.na=x)-mean(exprs(pset)[,12],na.rm=x)
+td6<-mean(exprs(pset)[,9],na.rm=x)-mean(exprs(pset)[,13],na.rm=x)
+#td9<-mean(mean(cbind(exprs(pset)[,1],exprs(pset)[,10])),na.rm=TRUE)-mean(exprs(pset)[,14],na.rm=TRUE)
+td9<-mean(mean(exprs(pset)[,10]),na.rm=x)-mean(exprs(pset)[,14],na.rm=x)
+tds<-c(td0,td3,td6,td9)
+tds
+shapiro.test(tds)$p.value
+```
+
+This gives the right answer...
+```{r}
+eshift = exprs(pset)["8000574", 7:10] - exprs(pset)["8000574", 11:14]
+shapiro.test(eshift)
+```
+
+### Does siNupr1 knock down NUPR1?
+
+Given that the Shapiro-Wilk test does not reject a Gaussian model for this tiny dataset, we might proceed to use a paired t-test to assess the null hypothesis that siNupr1 does not shift the mean trajectory of NUPR1 expression from 0 to 9 hours in the pc cell cultures.
+
+What is the p-value?:
+
+```{r}
+t.test(eshift)
+```
