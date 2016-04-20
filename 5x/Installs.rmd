@@ -44,5 +44,5 @@ As you work through exercises, if a Bioconductor package not found error is enco
 
 ```{r}
 library(BiocInstaller)
-biocLite("limma")
+biocLite("TxDb.Celegans.UCSC.ce6.ensGene")
 ```

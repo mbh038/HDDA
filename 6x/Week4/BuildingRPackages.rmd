@@ -1,0 +1,132 @@
+---
+title: "Untitled"
+author: "Michael Hunt"
+date: "April 20, 2016"
+output: html_document
+---
+
+## Understanding and building R packages
+
+[Book chapter: Understanding and building R packages](http://genomicsclass.github.io/book/pages/bioc2_rpacks.html#skel)
+
+### What is an R package?
+Conceptually, an R package is a collection of functions, data objects, and documentation that coherently support a family of related data analysis operations.
+
+Concretely, an R package is a structured collection of folders, organized and populated according to the rules of Writing R Extensions.
+
+
+### A new software package with package.skeleton
+
+```{r juxta}
+juxta = function (chrname="chr22", ...) 
+{
+    require(ERBS)
+    data(HepG2)
+    data(GM12878)
+    require(ggbio)
+    require(GenomicRanges)  # "subset" is overused, need import detail
+    ap1 = autoplot(GenomicRanges::subset(HepG2, seqnames==chrname))
+    ap2 = autoplot(GenomicRanges::subset(GM12878, seqnames==chrname))
+    tracks(HepG2 = ap1, Bcell = ap2, ...)
+# alternative code for Gviz below
+#    require(Gviz)
+#    ap1 = AnnotationTrack(GenomicRanges::subset(HepG2, seqnames==chrname))
+#    names(ap1) = "HepG2"
+#    ap2 = AnnotationTrack(GenomicRanges::subset(GM12878, seqnames==chrname))
+#    names(ap2) = "B-cell"
+#    ax = GenomeAxisTrack()
+#    plotTracks(list(ax, ap1, ap2))
+}
+```
+Basic idea of Juxta is to juxtapose pictures of the estrogen-like receptor alpha binding peaks for the two cell lines that we have isolated.
+
+```{r}
+library(ERBS)
+juxta("chr22", main="ESRRA binding peaks on chr22")
+```
+or with a different chromosome...
+
+```{r}
+library(ERBS)
+juxta("chr2", main="ESRRA binding peaks on chr2")
+```
+
+Now use __package.skeleton__ to make a package with this. The aim is Visualization of binding patterns where we juxtapose the results for two different cell lines.
+
+So how do we make a package that manages the software for this visualization? Simple!
+
+```{r}
+?package.skeleton
+```
+we need to name the package then define the R packages that are going to be in there.
+
+```{r}
+package.skeleton("erbsViz",list="juxta")
+install.packages("erbsViz", repos=NULL, type="source")
+```
+Use the erbsViz package as created during the video to perform the following computation:
+
+```{r}
+library(erbsViz)
+jdemo = juxta()
+```
+
+What is the class of jdemo?
+
+Answer:
+```{r}
+class(jdemo)
+```
+
+### Customization elements for the Tracks display
+
+Have a look at getSlots(getClass(class(jdemo))) to get a sense of how the display might be customized.
+
+What is the name of the Tracks slot that alters the color of the label text?
+
+```{r}
+getSlots(getClass("Tracks"))
+```
+
+### setup for a makeOrganismPackage call
+
+In the preceding video, we saw how to make an `OrganismDb` package for S. cerevisiae. In this problem set, you will make such a package for C. elegans. The `makeOrganismPackage` function in `OrganismDbi` requires a list for the `graphData` parameter
+
+```{r}
+
+# gd = list( join1 = c(GO.db="GOID", org.Sc.sgd.db="GO"),
+#            join2 = c(org.Sc.sgd.db="ENTREZID",
+#               TxDb.Scerevisiae.UCSC.sacCer3.sgdGene="GENEID"))
+
+gd = list(join1 = c(GO.db="GOID", org.Ce.eg.db="GO"),join2 = c(org.Ce.eg.db="ENTREZID", TxDb.Celegans.UCSC.ce6.ensGene="GENEID"))
+```
+
+What should you substitute for [fixme] in the call above? Hint: the package name to be used has eg.db as suffix. See the annotation [cheat sheet](http://genomicsclass.github.io/book/pages/annoCheat.html) for the contraction pattern.
+
+Answer:  
+`org.Ce.eg.db`
+
+### A query to the new Cen.ele6 package
+
+After correctly specifying gd above, use
+
+```{r}
+library(OrganismDbi)
+makeOrganismPackage("Cen.ele6", gd, "C. elegans", "1.0.0","me <me@abc.com>", "me <me@abc.com>", ".")
+```
+and install the package via
+
+```{r}
+install.packages("Cen.ele6", 
+    repos=NULL, type="source")
+```
+use library(Cen.ele6)
+
+```{r}
+library(Cen.ele6)
+```
+What is sum(seqlengths(Cen.ele6))?:
+
+```{r}
+sum(seqlengths(Cen.ele6))
+```
