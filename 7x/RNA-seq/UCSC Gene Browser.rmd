@@ -1,0 +1,50 @@
+---
+title: "UCSC Gene Browser"
+author: "Michael Hunt"
+date: "April 21, 2016"
+output: html_document
+---
+
+In the previous video, we saw that a gene can have different transcripts, with potential different starting points and ending points, different exons, similar exons but with different lengths, etc.
+
+In this short assessment, we will look up specific genes in the [UCSC Genome Browser](https://genome.ucsc.edu/cgi-bin/hgGateway), to investigate the gene model, that is, the different exons of the different transcripts.
+
+1. Go to the UCSC Genome Browser and set the genome assembly to Feb 2009 (GRCh37/hg19).
+
+2. Search for the gene, "RIT1".
+
+3. Click the top link on the next page.
+
+4. Zoom out 1.5x.
+
+5. Read the section "Gene prediction tracks" in the section, "Interpreting and fine-tuning the Genome Browser display".
+
+### Gene model Q1
+
+(1/1 point)
+According to the UCSC Genes track (it will be on top if you have the default arrangement), how many transcripts does RIT1 have? Note that the RefSeq Genes track below is a separate annotation of the same gene.
+
+Answer: 
+3
+
+EXPLANATION   
+There are three transcripts shown in the UCSC Genes track, which have different first and second exons (the thick part of the line). Note the first exons are on the right side because this gene is on the minus strand (it is transcribed from the right side to the left side). We know the gene is on the minus strand, because the arrows in the thin part of the gene (the introns) point to the left.
+
+### Gene model Q2
+
+According to UCSC Genes track, how many exons does the top transcript of RIT1 (uc031pqc.1) have?
+
+Answer: 
+6 
+EXPLANATION
+The thick lines represent exons.
+
+
+### Gene model Q3
+
+Look up a nearby gene, CCT3. How many transcripts does this gene have, according to the UCSC Genes track?
+
+Answer: 
+5
+
+The point of this simple assessment was just to get a visual sense of some actual genes, how many transcripts genes have, and how the exons differ between transcripts of a gene.
