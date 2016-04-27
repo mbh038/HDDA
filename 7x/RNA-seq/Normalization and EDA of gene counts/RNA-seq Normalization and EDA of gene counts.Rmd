@@ -1,0 +1,192 @@
+---
+title: "RNA-seq:  Normalization and EDA of gene counts"
+author: "Michael Hunt"
+date: "27 April 2016"
+output: html_document
+---
+
+## BAM files and GTF file
+
+[Book page: RNA-seq gene-level analysis](http://genomicsclass.github.io/book/pages/rnaseq_gene_level.html)
+
+[R Script](https://github.com/genomicsclass/labs/blob/master/rnaseq/rnaseq_gene_level.Rmd)
+
+## Count matrix
+
+In the previous video, we saw how to build a count matrix for the Himes et al dataset (in the airway package) using BAM files and a GTF file with the gene annotation.
+
+In this assessment, we will count RNA -seqfragments from a single sample in the Brooks et al dataset (BAM files of which are in the pasillaBamSubset package), and on a single chromosome of the drosophila genome.
+
+Instead of using a GTF file, we will show how to extract exons for each gene from a TxDb package for drosophila: 
+
+```{r,message=FALSE}
+library(TxDb.Dmelanogaster.UCSC.dm3.ensGene)
+```
+
+Load a single BAM files for a paired-end sequencing experiment:
+
+```{r}
+library(pasillaBamSubset)
+bam.file <- untreated3_chr4()
+library(Rsamtools)
+bf <- BamFile(bam.file)
+```
+
+Next, obtain the exons-by-gene object 'ebg' using this TxDb:
+
+```{r}
+library(TxDb.Dmelanogaster.UCSC.dm3.ensGene)
+txdb <- TxDb.Dmelanogaster.UCSC.dm3.ensGene
+ebg <- exonsBy(txdb, by="gene")
+```
+
+
+### Count matrix Q1
+
+What is the chromosome of the first gene in 'ebg'?
+
+```{r}
+seqnames(ebg[1])
+```
+
+We can subset to only the genes on chromosome 4 using the following R command:
+
+```{r}
+chr4.idx <- all(seqnames(ebg) == "chr4")
+ebg.sub <- ebg[chr4.idx]
+```
+
+What's going on here? seqnames(x) for a GRangesList gives back a "logical-Rle". RLE stands for "run-length-encoding" which is just a way of compressing the vector because we expect repeated values in a row (exons from the same gene are on the same chromsome). The all() function turns this into a standard logical vector with the same length as 'ebg'.
+
+### Count matrix Q2
+
+Count the fragments in the genes in 'ebg.sub' using summarizeOverlaps from the GenomicAlignments package and with settings:
+
+ignore.strand=TRUE (experiment was not strand-specific)
+
+singleEnd=FALSE (the experiment is paired-end)
+
+and leave the 'fragments' argument to its default value (fragments=FALSE)
+
+How many fragments are there for the first gene, FBgn0002521?
+
+```{r}
+library(GenomicAlignments)
+se <- summarizeOverlaps(ebg.sub,bf,
+                        #mode="Union",
+                        singleEnd=FALSE,
+                        ignore.strand=TRUE,
+                        fragments=FALSE)
+head(assay(se), 1)
+```
+
+## Normalization and transformation
+
+For the normalization and transformation assessment, we will examine RNA-seq count matrices prepared by the ReCount project. Below I have two lines of code which will download an ExpressionSet object from the website, for the Wang et al dataset. This is an analysis of 22 RNA-seq samples of different human tissues. The ReCount project website has more details on the alignment and counting steps.
+
+```{r}
+download.file("http://bowtie-bio.sourceforge.net/recount/ExpressionSets/wang_eset.RData", "wang_eset.RData")
+```
+
+Note: if the file above is not available, you can also download wang_eset.RData hosted on our course.
+
+Then load this RData file within R:
+
+```{r}
+load("wang_eset.RData")
+library(Biobase)
+```
+
+We will take a subset of the count matrix and the column data for building a DESeqDataSet:
+
+```{r}
+count.matrix <- exprs(wang.eset)[,10:21]
+col.data <- pData(wang.eset)[10:21,]
+library(DESeq2)
+dds <- DESeqDataSetFromMatrix(count.matrix, col.data, design=~cell.type)
+```
+
+Note, the DESeqDataSetFromMatrix function is smart and it looks to see if there are funny things with our data. You'll notice it gives a message here that there were levels of cell.type which had no associated samples, and therefore these levels were "dropped".
+
+Our goal in the rest of the assessment will be to estimate a correction for sequencing depth and perform simple EDA of the samples by cell type. The tissue information is in:
+
+```{r}
+dds$cell.type
+```
+
+### Norm. and transform. Q1
+
+What tissue has the highest size factor (as calculated by DESeq's estimateSizeFactors)? Copy the name exactly as it appears in your R session, only without quote marks.
+
+```{r}
+dds <- estimateSizeFactors(dds)
+dds$cell.type[which.max(sizeFactors(dds))]
+```
+
+### Norm. and transform. Q2
+
+Run the varianceStabilizingTransformation() transformation (blind=FALSE) on the counts, save this to an object 'vsd', and then make a PCA plot with "cell.type" as the color of the points.
+
+What sample clusters with cerebellum? Give the name of the cell-type exactly as it appears in the plot legend. Be careful!! the colors can be similar.
+
+```{r}
+vsd <- varianceStabilizingTransformation(dds,blind=FALSE)
+colData(dds)
+plotPCA(vsd,intgroup="cell.type")
+
+library(ggplot2)
+rld <- rlog(dds)
+(data <- plotPCA(rld, intgroup=c("cell.type"), returnData=TRUE))
+(percentVar <- 100*round(attr(data, "percentVar"),2))
+makeLab <- function(x,pc) paste0("PC",pc,": ",x,"% variance")
+ggplot(data, aes(PC1,PC2,col=cell.type)) + geom_point() +
+  xlab(makeLab(percentVar[1],1)) + ylab(makeLab(percentVar[2],2))
+```
+
+Answer:  
+mixed.brain (!)  
+
+### Norm. and transform. Q3  
+
+For the last question, we will make a scatterplot matrix of some of the samples' transformed counts.
+
+```{r}
+rmeans <- rowMeans(assay(vsd)) # row mean of rlog-transformed data
+idx <- c(1,2,10,7,8,9,12) # pick some samples for visualization
+mat <- assay(vsd)[rmeans > 1,idx] # pull out a small matrix of rlog-transformed counts
+colnames(mat) <- vsd$cell.type[idx] # name the columns of matrix by cell type
+```
+
+Now we could already call pairs() on this matrix, and it would make a matrix of scatterplots. But we will add an extra bit of code that will make a fast, subsetted scatter plot on top and add Pearson correlations below (the correlation code is directly copied from ?pairs):
+
+```{r}
+panel.sub <- function(x,y,...) points(cbind(x,y)[sample(length(x),1000),],...)
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)  {
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r <- abs(cor(x, y))
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste0(prefix, txt)
+  if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+  text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+```
+
+Now make our scatterplot matrix:
+
+```{r}
+pairs(mat, asp=1, col=rgb(0,0,0,.3), lower.panel=panel.cor, upper.panel=panel.sub)
+```
+
+Which tissue in 'mat' has the highest correlation to skeletal muscle? (This should make some sense biologically, as similar tissues will have similar gene expression profiles.)
+
+Answer:  
+heart  see plot.
+
+or using R:
+
+```{r}
+colnames(mat[,-7])[ which.max(cor(mat[,7], mat[,-7])) ]
+```
+
+Note, that this makes some intuitive sense, because heart is mostly muscle.

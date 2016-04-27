@@ -303,3 +303,173 @@ Click View > Preferences > Alignments tab. At the top, make sure that "Downsampl
 How many reads are in the first intron (the rightmost intron)? (Just count by eye the number of reads falling entirely in this intron.)
 
 3. While the RNA-seq protocol is highly enriched for spliced mRNA, it is not uncommon to see a few reads in the intron or inter-genic regions. In Week 2, for analyzing expression, and differences in expression across samples, we will not count these reads.
+
+## Transcriptome alignment with RSEM I
+
+RSEM software homepage: http://deweylab.biostat.wisc.edu/rsem/
+
+RSEM paper: http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3163565/
+
+The commands used in this video are provided in a Markdown file [here](https://github.com/genomicsclass/labs/blob/master/rnaseq/trancsript_align_RSEM.md).
+
+In the previous video we calculated expression by probabilistically aligning reads with the RSEM software. And we have provided for you two results files:
+
+genes.results (.5 Mb)
+
+isoforms.results (1 Mb)
+
+We will investigate the values for various columns in these tables. For reference, the documentation for these file formats is here.
+
+First, read these into an R session with the following lines:
+
+```{r}
+genes <- read.table("SRR1039508.genes.results", header=TRUE)
+isoforms <- read.table("SRR1039508.isoforms.results", header=TRUE)
+```
+
+Both 'genes' and 'isoforms' have a column FPKM. 
+
+Using split() and sapply(), confirm that the FPKM column in 'genes' is the sum of the FPKM column in 'isoforms':
+
+```{r}
+fpkm.per.gene <- split(isoforms$FPKM, isoforms$gene_id)
+head(sapply(fpkm.per.gene, sum))
+head(genes$FPKM)
+```
+
+Or equivalently using dplyr:
+
+```{r}
+# if not yet installed: install.packages("dplyr")
+library(dplyr)
+isoforms %>% group_by(gene_id) %>% summarize(sum = sum(FPKM))  
+```
+
+ 
+
+Make a histogram of the FPKM column in 'genes'. Make a histogram after transforming by: log10(x+1).
+
+```{r}
+hist(genes$FPKM,breaks=50)
+hist(log10(genes$FPKM+1),breaks=50)
+```
+
+Loads of genes with FPKM = 0
+
+Make new tables, removing the genes with FPKM 0:
+
+```{r}
+genes2 <- genes[genes$FPKM > 0,]
+genes2$gene_id <- droplevels(genes2$gene_id)
+isoforms2 <- isoforms[isoforms$gene_id %in% genes2$gene_id,]
+isoforms2$gene_id <- droplevels(isoforms2$gene_id)
+```
+
+We will continue below using these new tables.
+
+We perform a check that the "gene_id" column in genes2 is equal to the levels of the "gene_id" factor in isoforms2:
+
+```{r}
+stopifnot(all(genes2$gene_id == levels(isoforms2$gene_id)))
+```
+
+If this line runs without error, then we know the check passed.
+
+With 'genes2', make a plot of the effective_length (x-axis) and the expected_count (y-axis), with both axes on the log scale: log="xy".
+
+```{r}
+plot(genes2$effective_length,genes2$expected_count,log="xy")
+```
+
+### Transcript align Q1
+
+Make a histogram of the FPKM in genes2. Make a histogram after transforming with: log10(x).
+
+What is the median FPKM of the genes with positive FPKM (i.e. the genes2 table)?
+
+
+```{r}
+hist(genes2$FPKM,breaks=50)
+hist(log10(genes2$FPKM+1),breaks=50)
+summary(genes2$FPKM)
+```
+
+### Transcript align Q2
+
+With 'isoforms2', calculate the maximum IsoPct for each gene, 'max.iso'. Make a histogram of 'max.iso'.
+
+For what ratio of genes is the maximum IsoPct higher than 95? (Enter a number between 0 and 1.)
+
+```{r}
+# if not yet installed: install.packages("dplyr")
+library(dplyr)
+res<-isoforms2 %>% group_by(gene_id) %>% summarize(max.iso = max(IsoPct))
+hist(res$max.iso)
+mean(res$max.iso>95)
+```
+
+model answer:
+```{r}
+# with dplyr:
+isoforms2 %>% group_by(gene_id) %>% summarize(max.iso = max(IsoPct)) %>% summarize(answer = mean(max.iso > 95))
+
+# and without: 
+max.iso = sapply(split(isoforms2$IsoPct, isoforms2$gene_id), max)
+
+mean(max.iso > 95)
+```
+
+### Transcript align Q3
+
+Is there a relationship between total expression and the maximum IsoPct per gene?
+
+Make a plot of 'max.iso' on the x-axis and genes2$FPKM on the y-axis (with log="y").
+
+```{r}
+plot(res$max.iso,genes2$FPKM,log="y")
+```
+
+Sometimes it is difficult to see relationships when many points stack at one value. Try a boxplot:
+
+```{r}
+boxplot(split(log10(genes2$FPKM), cut(max.iso, 5)), xlab="max.iso", ylab="log10 FPKM")
+```
+
+Which group has the lowest median FPKM? Genes with 'max.iso' in the range:
+
+ 12.5 - 30.1  
+ 30.1 - 47.6  
+ 47.6 - 65  
+ 65 - 82.5  
+ 82.5 - 100  - correct
+ 
+Calculate the number of isoforms per gene, and plot the maximum IsoPct over the number of isoforms:
+
+```{r}
+num.iso <- as.numeric(table(isoforms2$gene_id))
+plot(num.iso, max.iso)
+```
+
+Make a barplot of the number of genes according to number of isoforms:
+
+```{r}
+barplot(table(num.iso))
+barplot(table(num.iso[num.iso < 15]))
+```
+
+The FPKM (fragments per kilobase of sequence per million mapped reads) is a normalized measure of expression level (having divided out the transcript length and the number of mapped reads).
+
+TPM (transcripts per million), is a linear scaling of the FPKM, such that we would expect a gene with 1 TPM to have one molecule in a population of one million mRNA.
+
+With genes2 plot the TPM over the FPKM.
+
+```{r}
+plot(genes2$FPKM,genes2$TPM)
+```
+
+Confirm that TPM is equal to: (FPKM / sum(FPKM)) * 1 million
+
+```{r}
+plot(genes2$TPM,1e6*genes2$FPKM/sum(genes2$FPKM))
+abline(0,1)
+```
