@@ -1,0 +1,11 @@
+PASS	Basic Statistics	SRR1039508_1.fastq
+PASS	Per base sequence quality	SRR1039508_1.fastq
+PASS	Per sequence quality scores	SRR1039508_1.fastq
+PASS	Per base sequence content	SRR1039508_1.fastq
+PASS	Per base GC content	SRR1039508_1.fastq
+PASS	Per sequence GC content	SRR1039508_1.fastq
+PASS	Per base N content	SRR1039508_1.fastq
+PASS	Sequence Length Distribution	SRR1039508_1.fastq
+FAIL	Sequence Duplication Levels	SRR1039508_1.fastq
+WARN	Overrepresented sequences	SRR1039508_1.fastq
+WARN	Kmer Content	SRR1039508_1.fastq

@@ -1,0 +1,194 @@
+---
+title: "Introduction to RNA sequencing"
+author: "Michael Hunt"
+date: "April 21, 2016"
+output: html_document
+---
+
+## Gene model
+
+In the previous video, we saw that a gene can have different transcripts, with potential different starting points and ending points, different exons, similar exons but with different lengths, etc.
+
+In this short assessment, we will look up specific genes in the [UCSC Genome Browser](https://genome.ucsc.edu/cgi-bin/hgGateway), to investigate the gene model, that is, the different exons of the different transcripts.
+
+1. Go to the UCSC Genome Browser and set the genome assembly to Feb 2009 (GRCh37/hg19).
+
+2. Search for the gene, "RIT1".
+
+3. Click the top link on the next page.
+
+4. Zoom out 1.5x.
+
+5. Read the section "Gene prediction tracks" in the section, "Interpreting and fine-tuning the Genome Browser display".
+
+### Gene model Q1
+
+(1/1 point)
+According to the UCSC Genes track (it will be on top if you have the default arrangement), how many transcripts does RIT1 have? Note that the RefSeq Genes track below is a separate annotation of the same gene.
+
+Answer: 
+3
+
+EXPLANATION   
+There are three transcripts shown in the UCSC Genes track, which have different first and second exons (the thick part of the line). Note the first exons are on the right side because this gene is on the minus strand (it is transcribed from the right side to the left side). We know the gene is on the minus strand, because the arrows in the thin part of the gene (the introns) point to the left.
+
+### Gene model Q2
+
+According to UCSC Genes track, how many exons does the top transcript of RIT1 (uc031pqc.1) have?
+
+Answer: 
+6 
+EXPLANATION
+The thick lines represent exons.
+
+
+### Gene model Q3
+
+Look up a nearby gene, CCT3. How many transcripts does this gene have, according to the UCSC Genes track?
+
+Answer: 
+5
+
+The point of this simple assessment was just to get a visual sense of some actual genes, how many transcripts genes have, and how the exons differ between transcripts of a gene.
+
+## Model for quantification
+
+### Model for quant. Q1
+
+In the previous video, we learned that, under an assumption of uniform sampling of reads from transcripts, the number of reads we observe for a given gene is proportional to the number of copies of the gene and the length of the gene.
+
+In this assessment, we will focus on a single gene. Suppose a gene has the following three transcripts, with $k$, the number of copies of the gene, and $l$, the length of the gene in basepairs.
+
+![model](modelForQuant.png)
+
+### Model for quant. Q1
+
+If we sequence from these RNAs uniformly at a rate of 1 read per 1 basepair, how many total reads will we expect on average for this gene?
+
+Answer:  
+24000. We just need to multiply each transcripts copy number (k) with its length (l) and sum these.
+
+4 * 3000 + 7 * 1000 + 1 * 5000
+
+### Model for quant. Q2
+
+Now suppose, the proportion of each transcript changes, although the total number of copies of transcripts from the gene stays constant. Now we have:
+
+k1 = 7  
+
+k2 = 4  
+
+k3 = 1  
+
+Now how many total reads will we expect on average from this gene?
+
+Answer: 
+30000. 7 * 3000 + 4 * 1000 + 1 * 5000  
+
+The differences between the lengths of a gene's transcripts are typically not this extreme. But it is important to remember that changes in the abundance of each transcript will have an effect on the total count of reads from a gene, when the transcripts have different lengths, as we saw above.
+
+We will see in a video in the next subsection, that the RSEM software which quantifies transcript abundance, will estimate for each gene the weighted average transcript length, weighting by the estimate of percent expression for each transcript. This amount, along with changes in total gene expression and sequencing depth, will tell us how much the total count of reads for a gene might change across samples. If there are no changes in the percent expression of the transcripts for a gene, then the average transcript length will be equal across samples.
+
+## Transcript quantification  
+
+In the previous video, we showed the model for quantification of each of three possible transcripts (also called "isoforms") of a gene. Here we will try to find the maximum likelihood estimate of $\theta$ for a given set of counts and lengths.
+
+$E \left( \begin{array}{c} Y_1 / w l_1 \\ Y_2 / w l_2 \\ Y_3 / w l_3 \\ Y_{1,2} / w l_{1,2} \\ Y_{2,3} / w l_{2,3} \end{array} \right) = \left( \begin{array}{ccc} 1 & 1 & 0 \\ 1 & 1 & 1 \\ 0 & 1 & 1 \\ 1 & 1 & 0 \\ 0 & 1 & 1 \end{array} \right) \left( \begin{array}{c} \theta _1 \\ \theta _2 \\ \theta _3 \end{array} \right)$
+
+For this assessment we will consider only a single gene for simplicity.
+
+The l's give the lengths for the regions which contribute to the exon counts for 1, 2 and 3 and to the junction counts for {1,2} and for {2,3}. We will assume these counts are disjoint: so a read counts for an exon only if it does not cross a junction. This is a simplified model, which allows independence of the counts.
+
+Suppose the following lengths:
+
+```{r}
+l1 = 100
+l2 = 200
+l3 = 300
+l12 = 100
+l23 = 100
+```
+
+We can write the lengths vector in R:
+
+```{r}
+lengths = c(100,200,300,100,100)
+```
+
+The matrix which identifies transcripts with exons and junctions:
+
+```{r}
+mat = cbind(c(1,1,0,1,0),c(1,1,1,1,1),c(0,1,1,0,1))
+```
+
+The length of the transcripts is then: `lengths %*% mat` 
+
+Suppose we align 1000 reads to this gene. So `w = 1000`.
+
+Suppose we observe the following read counts for the exons and for the two junctions:
+
+```{r}
+counts = c(125,350,300,125,100)
+```
+
+Given the formula above, and the assumption of uniform read distribution and Poisson counts, we can get a rough estimate of theta by just solving the linear system above. The estimate is only a rough one, because we will not use the probabilistic model in the previous video. We will walk through the estimation step-by-step below.
+
+First try a guess at theta:
+
+```{r}
+theta.hat = c(1, 2, 3) / 10000
+```
+
+We can see with this guess, our counts are too low, and not properly apportioned to the exons and junctions:
+
+```{r}
+mat %*% theta.hat * lengths * w
+```
+
+We can roughly estimate theta by solving the linear system of equations above:
+
+```{r}
+LHS = counts/(lengths * w)
+lm.fit(mat, LHS)$coefficients
+```
+
+We note we are only roughly estimating theta, because we are not using the likelihood from our probabilitistic model for counts, but simply minizing the squared error between the left-hand side (LHS) and the right-hand side of the equation (recall the linear models covered in PH525.2x).
+
+### Transcript quant. Q1
+
+What is the estimate of theta using our rough estimator, for the first transcript (the transcript with exon 1 and exon 2)?
+
+Answer:  
+0.00075 = 'lm.fit(mat, LHS)$coefficients[1]`
+
+By following the code above, solving the linear system of equations gives a rough estimate of theta as:
+
+```{r}
+theta.hat = lm.fit(mat, LHS)$coefficients
+theta.hat
+```
+
+This reproduces the observed counts exactly:
+
+```{r}
+mat %*% theta.hat * lengths * w
+```
+
+### Transcript quant. Q2
+
+Transcript quant. Q2
+
+What would be the rough estimate of theta for the first transcript if the counts for exons and junctions were 60,320,420,60,140?
+
+```{r}
+counts2=c(60,320,420,60,140)
+LHS2 = counts2/(lengths * w)
+theta.hat2=lm.fit(mat, LHS2)$coefficients
+theta.hat2[1]
+```
+
+Note that if we only had one transcript for this gene, our estimate of theta would be simply:
+
+total counts / (total length * w)
+
+giving us a number which is 1/10^9 times the common RPKM or FPKM measure (reads or fragments per kilobase of sequence, per million mapped reads).

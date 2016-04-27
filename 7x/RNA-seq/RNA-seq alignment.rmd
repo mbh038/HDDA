@@ -1,0 +1,305 @@
+---
+title: "RNA-seq alignment"
+author: "Michael Hunt"
+date: "April 26, 2016"
+output: html_document
+---
+
+## FASTQ
+
+Here is the beginning of the file SRR1039508_1.fastq, which contains the first read of the pair for the experiment:
+
+@SRR1039508.1 HWI-ST177:290:C0TECACXX:1:1101:1225:2130/1
+CATTGCTGATACCAANNNNNNNNGCATTCCTCAAGGTCTTCCTCCTTCCCTTACGGAATTACA
++
+HJJJJJJJJJJJJJJ########00?GHIJJJJJJJIJJJJJJJJJJJJJJJJJHHHFFFFFD
+@SRR1039508.2 HWI-ST177:290:C0TECACXX:1:1101:1311:2131/1
+CCCTGGACTGCTTCTTGAAAAGTGCCATCCAAACTCTATCTTTGGGGAGAGTATGATAGAGAT
++
+HJJJJJJJJJJJJJJJJJIIJIGHIJJJJJJJJJJJJJJJJJJJJJJGHHIDHIJJHHHHHHF
+@SRR1039508.3 HWI-ST177:290:C0TECACXX:1:1101:1414:2163/1
+TCGATCCATCGATTGGAAGGCACTGATCTGGACTGTCAGGTTGGTGGTCTTATTTGCAAGTCC
++
+HJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJGJJIGHIJJBGIJCGIAHIJHHHHHHHFFFFF
+
+Here we see three reads, with names, sequence, +, then quality score.
+
+We will try to find the position of the third read using a simple BLAST search to the human genome (build hg19 / GRCh37).
+
+On the [BLAST search](http://blast.ncbi.nlm.nih.gov/Blast.cgi?PAGE_TYPE=BlastSearch&BLAST_SPEC=OGP__9606__9558&LINK_LOC=blasthome) page, under Choose Search Set > Database > choose Genome (GRCh37.p13 reference assembly...)
+
+### FASTQ Q1
+
+The third read aligns uniquely to chromosome 16 of the human genome, falling in the second exon of the gene DHX38, which is on the plus strand (transcribed from left to right). What is the genomic position to which the first basepair of the third read aligns? (Use human genome build: hg19 / GRCh37)
+
+Answer:  
+Under "Query Sequence" enter
+
+>SRR1039508.3 HWI-ST177:290:C0TECACXX:1:1101:1414:2163/1
+TCGATCCATCGATTGGAAGGCACTGATCTGGACTGTCAGGTTGGTGGTCTTATTTGCAAGTCC
+
+Get: 72130081
+
+Searching with BLAST we get a unique hit, on the plus strand, to chromosome 16:
+
+Range 1: 72130081 to 72130143
+
+We could also use Bioconductor:
+
+```{r,message=FALSE}
+# note the difference to the next chunk - here we are reading a plus strand.
+library(BSgenome.Hsapiens.UCSC.hg19)
+# matchPattern is from library Biostrings
+matchPattern("TCGATCCATCGATTGGAAGGCACTGATCTGGACTGTCAGGTTGGTGGTCTTATTTGCAAGTCC", Hsapiens$chr16)
+```
+
+### FASTQ Q2
+
+The first three reads in the second file are as follows:
+
+@SRR1039508.1 HWI-ST177:290:C0TECACXX:1:1101:1225:2130/2
+CAGATGAGGCGTGTTGGCCAGAGAGCCATTGTCAACAGCAGAGATGNNNNNNNNNNNNAATCC
++
+HJJJJJJJJJJHIIIJJJJJJJJJJJJJJJJJJJJJJJHIJIJHII#################
+@SRR1039508.2 HWI-ST177:290:C0TECACXX:1:1101:1311:2131/2
+TACTCCGGAGAACAGATGGGATTCCCTAGGAGACCCTTGAGGGAAAAGGGAGCCCCAATCTCT
++
+FJJJJJJJFHEHJJJHIIJJGGIIJJGIIJGJHJJJJJHGIJJIGIHHHHFFFDDDDDDDDDE
+@SRR1039508.3 HWI-ST177:290:C0TECACXX:1:1101:1414:2163/2
+TCGCTCTCTCCGTTTCAGGGAAGCCAGCAAGTCCAGTCCGAGTAATGAAGGGCGGGGAGCAGG
++
+HJJJJJJJJJJJJJJJJJJJIJJJJJJJJJJIJJJJJJFHIJFHJJJJJIHHHFDDDDDDDDD
+
+Align the third read above to the human genome, as we did previously.
+
+The third read in the second file also aligns uniquely to chromosome 16 of the human genome, aligning to the _minus_ strand, also in the second exon of the gene DHX38. What is the genomic position to which the first basepair of the third read in the second file aligns?
+
+Answer:  72130242  
+Searching with BLAST we get a unique hit, on the minus strand, to chromosome 16:
+
+Range 1: 72130180 to 72130242
+
+So the first basepair of the read is the last basepair in the alignment: 72130242
+
+We could also use Bioconductor:
+
+```{r,message=FALSE}
+# note the difference to the previous chunk - here we are reading a minus strand.
+library(BSgenome.Hsapiens.UCSC.hg19)
+matchPattern(reverseComplement(DNAString("TCGCTCTCTCCGTTTCAGGGAAGCCAGCAAGTCCAGTCCGAGTAATGAAGGGCGGGGAGCAGG")), Hsapiens$chr16)
+```
+
+Above we saw the two reads of a paired-end fragment, both aligning within an exon of a human gene.
+
+For a strand-specific RNA-sequencing protocol, we could have seen this kind of alignment to a + strand gene:
+
+[1st read + strand] ... [2nd read - strand]
+
+...or we could have seen the 1st read aligning on the right side:
+
+[2nd read + strand] ... [1st read - strand]
+
+A strand-specific protocol means that we only observe fragments with the same strand as the gene.
+
+However, many experiments, including the one we are examining are not strand-specific. This means that, for a plus strand gene, we will observe, in addition to the above two kinds of paired-end fragments, two more:
+
+[1st read - strand] ... [2nd read + strand]
+
+[2nd read - strand] ... [1st read + strand]
+
+## FASTQC
+
+Unzip and open the FASTQC report for the second file. The following questions will ask about the information in this report. Remember you can check the FASTQC help files for more information (in particular the Analysis Modules explanations).
+
+### FASTQC Q1
+
+Which basepair has the lowest 10% quality score?
+
+9. In the second module, 'Per base sequence quality', the whiskers on the boxplots indicate the 10% and 90% of the quality scores at each position.
+
+
+### FASTQC Q2
+
+What base is most common in the first position of the read?
+
+T. The red line is highest at position 1 in the fourth module, "Per base sequence content".
+
+### FASTQC Q3
+
+The sequence GGAAA spikes at position 10, what is the observed / expected value at this position for GGAAA?
+
+5.1476827. The last module, "K-mer content", has a table with the observed / expected for the position with the max.
+
+## Genome alignment 
+
+The header of the Aligned.out.sam file is pasted below:
+
+```
+@PG     ID:STAR PN:STAR VN:STAR_2.3.1z_r395     CL:STAR   --runThreadN 12   --genomeDir GRCh38.79.chrom1   --readFilesIn fastq/SRR1039508_1.fastq   fastq/SRR1039508_2.fastq    cl:STAR --runThreadN 12 --genomeDir GRCh38.79.chrom1 --readFilesIn fastq/SRR1039508_1.fastq fastq/SRR1039508_2.fastq
+@SQ     SN:1    LN:248956422
+SRR1039508.7    163     1       96446974        255     63M     =       96446997        86      CGTAGATTCGGGCAAGTCCACCACTACTGGCCATCTGATCTATAAATGCGGTGGCATCGACAA HJHIJJJJJJJJJJJJJJJIJJJJJJJJIJJJJJJJJJIIJJJJJJJJJJJEHHFFFFDEDDD NH:i:1  HI:i:1  AS:i:110        nM:i:7
+SRR1039508.7    83      1       96446997        255     63M     =       96446974        -86     CTACTGGCCATCTGATCTATAAATGCGGTGGCATCGACAAAAGAACCATTGAAAAATTTGAGA FHHHHHJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJH NH:i:1  HI:i:1  AS:i:110        nM:i:7
+SRR1039508.16   163     1       243426450       255     63M     =       243426495       108     AAGAAAAAAGGTATACATATGATAAATTGGGAAAGTTACAGAGAAGAAATGAAGAATTGGAGG HJJJJJJJJJJAGIJJJIJJJJJJJJJJIJJIIJJHIJFHJIJJIJIJJJJJJJJIJJHHHHG NH:i:1  HI:i:1  AS:i:124        nM:i:0
+SRR1039508.16   83      1       243426495       255     63M     =       243426450       -108    GAAATGAAGAATTGGAGGAACAGTGTGTCCAGCATGGGAGAGTACATGAGACGATGAAGCAAA IJJIGJJJJJIIIJJJJJIIJJJJJJJIJJJJJIGJJIJJJJJIJJJJIJJJJJJJJJJJJJH NH:i:1  HI:i:1  AS:i:124        nM:i:0
+```
+
+The [SAM](https://samtools.github.io/hts-specs/SAMv1.pdf) format and its compressed version, BAM, contains information about the alignment of sequences to a reference genome.
+
+Section 1.3 describes the header of the SAM file.
+
+
+### Genome align Q1
+
+What is the length of reference sequence 1 according to our SAM file?
+From checking the table in section 1.3 of the SAM format specification, we know the @SQ gives the reference sequence 1 length with LN:
+
+@SQ SN:1 LN:248956422
+
+### Genome align Q2
+
+In section 1.4 on the alignments, the different fields are described. The CIGAR string tells us how the read aligned to the genome, using numbers and letters, M for match, I for insertion, D for deletion, N for skipped bases on the reference genome.
+
+What is the CIGAR string for all of the two pairs of reads we are shown above? (The answer includes numbers and a letter)
+
+63M.The table in section 1.4 shows that the CIGAR string is in the 6th column. All reads have 63M here.
+
+### Genome align Q3
+
+In section 1.4, we see that the second column is a bitwise FLAG, an integer which encodes possible YES/NO answers to the choices below.
+
+The bitwise FLAG is most easily decoded at this link, [Explain SAM Flags](http://broadinstitute.github.io/picard/explain-flags.html), for the PICARD software.
+
+Type the bitwise FLAG of the top read above into the SAM flag explainer. Which choices are true about this read?
+
+ read paired  -- correct  
+ read mapped in proper pair -- correct   
+ read unmapped  
+ mate unmapped  
+ read reverse strand  
+ mate reverse strand  -- correct  
+ first in pair  
+ second in pair  -- correct  
+ not primary alignment  
+ read fails platform/vendor quality checks  
+ read is PCR or optical duplicate  
+ supplementary alignment
+ 
+ Typing '163' into the SAM flag explainer gives us the right choices above.
+ 
+ Read 7 in the first FASTQ file was:
+
+```
+@SRR1039508.7 HWI-ST177:290:C0TECACXX:1:1101:1952:2109/1
+TCTCAAATTTTTCAATGGTTCTTTTGTCGATGCCACCGCATTTATAGATCAGATGGCCAGTAG
++
+HJJJJJJJJJJJJJJJJJIJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJHHHHHF
+
+Read 7 in the second FASTQ file was:
+
+@SRR1039508.7 HWI-ST177:290:C0TECACXX:1:1101:1952:2109/2
+CGTAGATTCGGGCAAGTCCACCACTACTGGCCATCTGATCTATAAATGCGGTGGCATCGACAA
++
+HJHIJJJJJJJJJJJJJJJIJJJJJJJJIJJJJJJJJJIIJJJJJJJJJJJEHHFFFFDEDDD
+```
+
+The '163' flag tells us that the first read in the SAM files corresponds to read 7 from the second FASTQ file. Note that the sequence of the read in the SAM file starts with "CGTAGA...", as does read 7 in the second FASTQ file. It also tells us that the mate is reverse strand. Note that read 7 in the first FASTQ file starts with "TCTCAA...", while the second read in the SAM file above ends with "...TTGAGA".
+
+In the FASTQ file, the sequence of the reads was from opposite strands, while in the SAM file, the sequence for the reads is on the same strand, that is, the strand has been reversed for one of the pairs.
+
+## Integrative Genomics Viewer (IGV)
+
+__NOTE__: in the previous video, we aligned reads to the most current Ensembl reference genome, hg38 / GRCh38. In this video, and in the sections of Week 2, we will examine reads in an already prepared BAM file, though this file was prepared more than a year ago. The reads in the BAM files provided were aligned to an earlier build of the human genome: __hg19 / GRCh37__. This is a good point to remember: that, if you receive an alignment file (BAM file), you should be confident that you know to which genome the reads were aligned. This is critical information for you to visualize and properly analyze the data.
+
+__NOTE__: in the video, alignments may appear earlier while zooming in than on your machine. There is a setting which controls this: View > Preferences > Alignments > __Visibility range threshold__. (Thanks to Fabio Amaral for pointing this out). So don't be surprised if the alignments in the video appear while on your machine it says "Zoom in to view the alignments".
+
+[IGV software homepage: ](https://www.broadinstitute.org/igv/) 
+
+The BAM file used in this video can be downloaded [here](https://courses.edx.org/c4x/HarvardX/PH525.5x/asset/SRR1039508_subset.bam) (less than 1 Mb). Note that this contains reads aligned to hg19.  
+
+The BAM Index file used in this video can be downloaded [here](https://courses.edx.org/c4x/HarvardX/PH525.5x/asset/SRR1039508_subset.bam.bai)
+.
+In this assessment we will use IGV to visualize the BAM file (reads aligned to hg19) seen in the previous video (which requires its index file as well).
+
+Once you have started IGV, you may have to click "More..." under genomes to get hg19.
+
+Zoom in to gene SRM which is within the range chr1:11,112,000-11,122,000.
+
+### IGV Q1
+
+A giveaway: which strand is this gene: plus or minus?
+
+minus., 
+RNA-seq > RNA-seq alignment > IGV assessment
+Previous Unit
+ other Links for RNA-seq alignment
+Note on this subsection 	 video Note
+Downloading FASTQ files 	 video First look at a FASTQ file 	 problem FASTQ assessment
+FASTQ Q1
+Second read file
+FASTQ Q2
+Strand-specific protocol or not strand-specific 	 video Quality control with FASTQC
+Links 	 other FASTQC note
+Other processing options 	 problem FASTQC assessment
+FASTQC Q1
+FASTQC Q2
+FASTQC Q3 	 video Note
+Genome alignment with STAR I 	 video Genome alignment with STAR II
+Downloads 	 problem Genome alignment assessment
+SAM format
+Genome align Q1
+Genome align Q2
+SAM FLAGS
+Genome align Q3
+Checking the FASTQ sequence 	 video Note
+Integrative Genomics Viewer (IGV)
+Links 	 problem IGV assessment
+IGV Q1
+IGV Q2
+Known SNP?
+IGV Q3 	 video Transcriptome alignment with RSEM I
+Links 	 video Transcriptome alignment with RSEM II
+Downloads 	 problem Transcriptome alignment assessment
+Quick data cleaning
+Transcript align Q1
+Transcript align Q2
+Transcript align Q3
+Number of isoforms per gene
+FPKM and TPM 
+Next Unit
+ Click to add  Bookmark
+In this assessment we will use IGV to visualize the BAM file (reads aligned to hg19) seen in the previous video (which requires its index file as well).
+
+Once you have started IGV, you may have to click "More..." under genomes to get hg19.
+
+Zoom in to gene SRM which is within the range chr1:11,112,000-11,122,000.
+
+### IGV Q1
+
+(1/1 point)
+A giveaway: which strand is this gene: plus or minus?
+
+minus - correct
+
+The arrows in the introns of the RefSeq Genes track point to the left.
+
+### IGV Q2
+
+In the first exon (rightmost) there is an alternate allele (C) to the reference (T). What is the genomic location of this SNP? (The number of the basepair only, don't include the chromosome.)
+
+11119899. The SNP is visible as a blue vertical line when zoomed out, upon zooming in we can see the alternate allele, the reference allele and the location from hovering over the position.
+
+Look up the region around the SNP: chr1:11,119,891-11,119,910 in the UCSC Genome Browser (hg19).
+
+You can right click and "Show details" for objects in the UCSC Genome Browser.
+
+This appears to be a known and synonymous variant (meaning it does not change the amino acid sequence in the resulting protein because both codons code for the same amino acid: S (TCA) --> S (TCG).
+
+### IGV Q3
+
+Back in IGV, right click on the BAM file track and choose Squished. We want to count how many reads are in a particular intron. First we will make sure that we see all the possible reads.
+
+Click View > Preferences > Alignments tab. At the top, make sure that "Downsample reads" is NOT checked. Later if you are using IGV for your own work, you may want to check this again, as it speeds up the visualization. But for this question we want to see all the reads.
+
+How many reads are in the first intron (the rightmost intron)? (Just count by eye the number of reads falling entirely in this intron.)
+
+3. While the RNA-seq protocol is highly enriched for spliced mRNA, it is not uncommon to see a few reads in the intron or inter-genic regions. In Week 2, for analyzing expression, and differences in expression across samples, we will not count these reads.
