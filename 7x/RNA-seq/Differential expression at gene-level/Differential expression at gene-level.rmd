@@ -1,5 +1,5 @@
 ---
-title: "Differential expression at gene-level: Modeling raw counts"
+title: "Differential expression at gene-level"
 author: "Michael Hunt"
 date: "April 28, 2016"
 output: html_document
@@ -158,7 +158,7 @@ We mentioned in the first week that gene counts are proportional to gene express
 
 We will continue with this DE analysis in the next assessment.
 
-## DE assessment II
+## DE assessment II: 
 
 Continue using the results table 'res' from the brain vs other sample comparison (the one testing LFC not equal to 0).
 
@@ -188,13 +188,155 @@ Build a vector of the names of the top 20 genes by the test statistic (largest f
 ```{r}
 top <- rownames(res)[head(order(res$stat, decreasing=TRUE), 20)]
 ```
-### DE II Q1
+### DE II Q1 : Getting alternate annotations
 
 Use org.Hs.eg.db to determine the gene symbol of the top gene in this list. What is the SYMBOL?
 
-org.Hs.eg.db
 ```{r}
 library(AnnotationDbi)
 library(org.Hs.eg.db)
+anno <- select(org.Hs.eg.db, keys=top,columns="SYMBOL", keytype="ENSEMBL")
+anno
+anno$SYMBOL[1]
 ```
 
+Answer: `anno$SYMBOL[1]`
+
+### DE II Q2
+
+Use org.Hs.eg.db to determine the GENENAME of the top genes. What is the GENENAME of the top gene?
+
+```{r}
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+anno <- select(org.Hs.eg.db, keys=top,columns="GENENAME", keytype="ENSEMBL")
+anno
+anno$GENENAME[1]
+```
+
+Answer: `anno$GENENAME[1]`
+
+You can use this link to search for more information about these genes by SYMBOL:
+
+[NCBI gene search](http://www.ncbi.nlm.nih.gov/gene?term=%22homo%20sapiens%22%5BOrganism%5D)
+
+What is the Summary after you search for the top gene by symbol?
+
+## SVA
+
+In this assessment, we will download a dataset which has 2 biological conditions (two inbred strains of mice) and 3 experimental batches, and see how well SVA does at detecting the batches. The code below downloads the data of Bottomly et al from the ReCount project:
+
+```{r}
+download.file("http://bowtie-bio.sourceforge.net/recount/ExpressionSets/bottomly_eset.RData", "bottomly_eset.RData")
+```
+
+Note: if the file above is not available, you can also download bottomly_eset.RData hosted on our course.
+
+
+```{r}
+load("bottomly_eset.RData")
+library(Biobase) 
+```
+
+Now build a DESeqDataSet from this object:                                                                                                    
+
+```{r}
+count.matrix <- exprs(bottomly.eset)
+col.data <- pData(bottomly.eset) 
+library(DESeq2)
+dds <- DESeqDataSetFromMatrix(count.matrix, col.data, design=~strain)
+```
+
+The "experiment.number" column is a numeric, so make sure to turn it into a factor:                                  
+```{r}
+dds$experiment.number <- factor(dds$experiment.number)
+```
+
+Estimate the size factors so we can get normalized counts later:
+
+```{r}
+dds <- estimateSizeFactors(dds)
+```
+
+Run the varianceStabilizingTransformation() on the dds and then make a PCA plot with c("strain","experiment.number") as the intgroup to label.
+
+Another transformation for stabilizing variance in the DESeq2 package is `varianceStabilizingTransformation`. These two tranformations are similar, the `rlog` might perform a bit better when the size factors vary widely, and the `varianceStabilizingTransformation` is much faster when there are many samples.
+
+```{r}
+vsd <- varianceStabilizingTransformation(dds, blind=FALSE)
+plotPCA(vsd, intgroup=c("strain","experiment.number"))
+```
+
+The strains have names "C57BL/6J" and "DBA/2J". 
+
+The experiments are numbered 4, 6 and 7. We can see that both strain and experimental batch have an effect on the normalized, transformed counts.
+
+Because we know the experimental batches, we could just use DESeq() with ~ experiment.number + strain to look for strain specific differences controlling for batch. But suppose we were given this data without the batch information. We could use SVA to try to identify the hidden structure.
+
+Run SVA-seq to find 2 surrogate variables using the code shown in the previous video (the Rmd file is [here](https://github.com/genomicsclass/labs/blob/master/rnaseq/rnaseq_gene_level.Rmd)).
+
+Use a design of ~ strain for the full model "mod" and ~ 1 for the reduced model "mod0".
+
+```{r}
+library(sva)
+dat <- counts(dds, normalized=TRUE)
+idx <- rowMeans(dat) > 1
+dat <- dat[idx,]
+mod <- model.matrix(~ strain, colData(dds))
+mod0 <- model.matrix(~ 1, colData(dds))
+svseq <- svaseq(dat, mod, mod0, n.sv=2)
+```
+
+Plot the surrogate variables and color by the true batches (remember, normally we wouldn't have this information if we needed to run SVA):
+
+```{r}
+plot(svseq$sv[,1], svseq$sv[,2], col=dds$experiment.number, pch=16)
+legend("bottom", levels(dds$experiment.number), pch=16, col=1:3)
+```
+
+Now add numbers to each sample:
+
+```{r}
+text(svseq$sv[,1], svseq$sv[,2], 1:ncol(dds), pos=1)
+```
+
+### SVA Q1
+
+Which sample (the number in the plot) from experiment number 6 is closest to the samples from experiment number 4, according to these two surrogate variables?
+
+Answer: 18
+
+## _tximport_
+
+In the past two years (2014-2016), a number of new methods have emerged which allow for rapid quantification of transcript abundances, skipping the alignment step. Rapid can mean a few minutes to quantify abundances for each RNA-seq sample, and only a few Gb of RAM. This is a very attractive option for RNA-seq analysis, because alignment is an extra step in the process (STAR is very fast but still takes time), alignment results in large alignment files (BAM files, multiple Gb each), and then anyway, we require an extra step to count the alignments to the genes for each sample (taking ~10-30 minutes per sample for human RNA-seq).
+
+The best way to understand how these new methods work is to read the papers. The first method was Sailfish, which was published in 2014 in Nature Biotechnology. You can read the paper here:
+
+Sailfish: http://www.ncbi.nlm.nih.gov/pubmed/24752080
+
+Since then, a method called kallisto (just recently published in Nature Biotechnology) and a method called Salmon (from the Sailfish authors) have also been released. The papers for these are publicly available here:
+
+kallisto: http://arxiv.org/abs/1505.02710
+
+Salmon: http://biorxiv.org/content/early/2015/10/03/021592
+
+The reason I bring these software up in the context of RNA-seq differential gene expression, is that, these tools can be used to quickly generate gene count matrices, which can then be used by the gene-level differential expression packages such as DESeq2, edgeR, or limma-voom.
+
+![tximport](tximport.png)
+
+A paper describing this strategy is:
+
+__Differential analyses for RNA-seq: transcript-level estimates improve gene-level inferences__, Charlotte Soneson, Michael I. Love, Mark D. Robinson
+http://f1000research.com/articles/4-1521/v1
+
+The Bioconductor software for importing the abundances from these tools, converting into gene-level counts is called "_tximport_" and can be found below. This package has a vignette which demonstrates both how to import files and how to hand off the count matrices to edgeR, DESeq2, or limma-voom.  All the DESeq2 analysis code that was shown in the previous units would be exactly the same using the _tximport_ pipeline, except for the read counting step, which would be skipped.
+
+NOTE: _tximport_ will be released in May 2016, until then, it is only available through a development branch of Bioconductor.
+
+https://bioconductor.org/packages/tximport
+
+Some advantages of using these tools, then _tximport_ to create gene-level count matrices are: (i) this approach corrects for potential changes in gene length across samples (e.g. from differential isoform usage, see [1]), (ii) these tools are substantially faster and require less memory and disk usage compared to alignment-based methods that require creation and storage of BAM files, and then counting, and (iii) it is possible to avoid discarding those fragments that can align to multiple genes with homologous sequence, thus increasing sensitivity (see [2]).
+
+[1] Trapnell, et al, "Differential analysis of gene regulation at transcript resolution with RNA-seq" 2012  http://www.nature.com/nbt/journal/v31/n1/abs/nbt.2450.html
+
+[2] Robert and Watson, "Errors in RNA-Seq quantification affect genes of relevance to human disease", 2015 https://genomebiology.biomedcentral.com/articles/10.1186/s13059-015-0734-x
