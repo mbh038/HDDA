@@ -1,0 +1,211 @@
+---
+title: "RNA-seq differential exon usage"
+author: "Michael Hunt"
+date: "29 April 2016"
+output: html_document
+---
+
+[Book page: RNA-seq differential exon usage](http://genomicsclass.github.io/book/pages/rnaseq_exon_usage.html)
+
+## Exon usage assessment
+
+We will look for differential exon usage in the same experimental data as shown in the video, but we will use a different subset of the genes (to speed up the time required for analysis on student's laptops).
+
+Build a DEXSeq dataset object:
+
+```{r,message=FALSE}
+library("pasilla")
+inDir = system.file("extdata", package="pasilla", mustWork=TRUE)        
+countFiles = list.files(inDir, pattern="fb.txt$", full.names=TRUE)    
+flattenedFile = list.files(inDir, pattern="gff$", full.names=TRUE) # gives info about the exonic parts
+
+sampleTable = data.frame(row.names = c( "treated1", "treated2", "treated3","untreated1", "untreated2", "untreated3", "untreated4" ), condition = c("knockdown", "knockdown", "knockdown", "control", "control", "control", "control" ))                 
+
+library("DEXSeq")  
+dxd = DEXSeqDataSetFromHTSeq(countFiles, sampleData=sampleTable, 
+  design= ~ sample + exon + condition:exon, flattenedfile=flattenedFile )
+```
+For explanation of the design, see the DEXSeq Vignette.
+
+Now we will subset to 1000 genes on chr2L which do not have low counts (just for demontration, typically you would just run the analysis on the whole dataset):
+
+```{r}
+rmean = rowMeans(counts(dxd))
+```
+
+We use rowRanges to pull out chr2L:
+
+```{r}
+dxd2L = dxd[seqnames(rowRanges(dxd)) == "chr2L" & rmean > 10,]
+```
+
+Now subset to first 1000:
+
+```{r}
+dxd2L = dxd2L[1:1000,]  
+```
+
+Now we run the estimation and testing functions:
+
+```{r}
+dxd2L = estimateSizeFactors( dxd2L)
+dxd2L = estimateDispersions( dxd2L )
+dxd2L= testForDEU(dxd2L )
+dxd2L = estimateExonFoldChanges( dxd2L, fitExpToVar="condition")
+```
+
+### Exon usage Q1
+
+What is the gene name of the gene with the exon with the smallest adjusted p-value for differntial exon usage? (The gene name is the part FBgn..., before the ':' and the exon number, E001. So stop before the ':')
+
+```{r}
+dxr = DEXSeqResults( dxd2L )
+pAdjMinGene<-rownames(dxr)[ which.min(dxr$padj) ]
+pAdjMinGene<-sub(":.*", "", pAdjMinGene) # extract everyuthing up to the colon
+pAdjMinGene
+```
+Now we make an MA-plot, and draw the expression levels over the exons to highlight differential exon usage:
+
+```{r}
+plotMA( dxr, cex=0.8 )
+```
+ 
+### Exon usage Q2
+
+Make a DEXSeq plot of the DEXSeq results object for this gene. 
+
+Use the settings:
+
+norCounts=TRUE, displayTranscripts=TRUE
+
+```{r}
+
+plotDEXSeq( dxr, pAdjMinGene, displayTranscripts=TRUE, legend=TRUE,
+              cex.axis=1.2,cex=1.3,lwd=2,norCounts=TRUE)
+```
+
+You should see two exonic parts with differential exon usage (colored pink). Exonic part E009 was the one with the smallest p-value in the dataset, consistently knocked down in control samples.
+
+### Exon usage Q2
+
+The transcripts are shown in the white boxes below the plot (the grey boxes just show all the exonic parts). Make the plot as wide as possible to help see the exonic parts. (In RStudio, click the zoom button)
+
+How many transcripts does exonic part E009 appear in?
+
+Answer:  
+From the plot, 1, only in transcript 6.
+
+### Exon usage Q3
+
+How many transcripts does exonic part E008 appear in but not exonic part E009?
+
+Answer: 3. From seeing the transcripts below the plot, transcript 2, 4 and 9 have E008 but not E009.
+
+
+The DEXSeq method was published in Genome Research in 2012:
+
+http://genome.cshlp.org/content/22/10/2008.full
+
+Since then, a number of comparison papers have compared the exon-centric approach to an isoform-centric approach. A recent comparison paper which is worth exploring is this one, published in Genome Biology in 2015:
+
+__Isoform prefiltering improves performance of count-based methods for analysis of differential transcript usage__, Charlotte Soneson, Katarina L. Matthes, Malgorzata Nowicka, Charity W. Law and Mark D. Robinson
+
+http://genomebiology.biomedcentral.com/articles/10.1186/s13059-015-0862-3
+
+The authors find that "[exon] count-based methods generally perform well in the detection of differential transcript usage", although DEXSeq's false discovery rate can be improved by filtering out isoforms from the annotation file which are very lowly or not expressed in the samples (see Figure 6).
+
+The choice of exon-centric vs isoform-centric differential analysis is best decided as to what would be more valuable for biological interpretation: do you, or does the biological collaborator want to know which _exons_ are being included or excluded across condition, or is it more useful to know the _isoforms_ that are differentially expressed across condition?
+
+## Isoform abundance assessment
+
+In this assessment, we will examine the isoform-level abundances which are saved as output from Cufflinks and accessible via the Bioconductor package [cummeRbund](http://www.bioconductor.org/packages/release/bioc/html/cummeRbund.html). 
+
+We will eventually ask, for each gene: how often is the most highly expressed isoform the same across two biological conditions?
+
+Start by creating a CuffSet object as we did in the video:
+
+```{r, message=FALSE,warning=FALSE}
+library(cummeRbund)
+myDir <- system.file("extdata", package="cummeRbund") 
+gtfFile <- system.file("extdata/chr1_snippet.gtf",package="cummeRbund")
+cuff <- readCufflinks(dir=myDir,gtfFile=gtfFile,genome="hg19",rebuild=TRUE)
+```
+
+Extract the annotation information with the annotation() function. This gives exon-level information. We just want to know the gene which each isoform belongs to, so we can remove duplicate rows belonging to the same isoform:
+
+```{r}
+gene.features <- annotation(genes(cuff))
+head(gene.features)
+isoforms.per.gene <- gene.features[!duplicated(gene.features$isoform_id),    c("gene_id","isoform_id")]
+isoforms.per.gene <- isoforms.per.gene[order(isoforms.per.gene$isoform_id),]
+head(isoforms.per.gene)
+```
+
+A single call to table() gives us a vector, one value for each gene, of the number of isoforms per gene:
+
+```{r}
+gene.tab <- table(isoforms.per.gene$gene_id)
+```
+
+### Isoform abundance Q1
+
+How many genes have only 1 isoform?
+
+```{r}
+table(gene.tab)
+#length(gene.tab[gene.tab==1])
+```
+
+Answer:  161
+
+The fpkm() function returns a data.frame of the FPKM estimates for each isoform and sample:
+
+```{r}
+isoform.fpkm <- fpkm(isoforms(cuff))
+head(isoform.fpkm)
+table(isoform.fpkm$sample_name)
+```
+
+Extract out tables for the iPS and hESC samples:
+
+```{r}
+ips <- isoform.fpkm[isoform.fpkm$sample_name == "iPS",]
+hesc <- isoform.fpkm[isoform.fpkm$sample_name == "hESC",]
+```
+
+Now check that the isoform_id from our FPKM tables and our isoforms-per-gene table are identical:
+
+```{r}
+stopifnot(all(ips$isoform_id == isoforms.per.gene$isoform_id))
+stopifnot(all(hesc$isoform_id == isoforms.per.gene$isoform_id))  
+```
+
+If these functions run without error, the columns are equal.
+
+Use sapply(), split() and which.max() to identify, for each sample, the index of the isoform with the largest FPKM. For example:
+
+```{r}
+ips.max <- sapply(split(ips$fpkm, isoforms.per.gene$gene_id), which.max)
+head(ips.max)
+```
+
+### Isoform abundance Q2
+
+Across all genes in our tables, how often is the highest expressed isoform the same one in iPS and hESC cells? Give a proportion (number between 0 and 1).
+
+```{r}
+ips.max <- sapply(split(ips$fpkm, isoforms.per.gene$gene_id), which.max)
+hesc.max <- sapply(split(hesc$fpkm, isoforms.per.gene$gene_id), which.max)
+mean(hesc.max==ips.max)
+```
+
+### Isoform abundance Q3
+
+Subsetting to only the genes that have more than one isoform, how often is the highest expressed isoform the same one in iPS and hESC cells? (Hint: you already have gene.tab calculated)
+
+```{r}
+ips.max = sapply(split(ips$fpkm, isoforms.per.gene$gene_id), which.max)
+hesc.max = sapply(split(hesc$fpkm, isoforms.per.gene$gene_id), which.max)
+index=gene.tab>1
+mean((hesc.max==ips.max)[index])
+```
