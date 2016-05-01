@@ -1,0 +1,204 @@
+---
+title: "DNA Methylation Measurement 1"
+author: "Michael Hunt"
+date: "April 30, 2016"
+output: html_document
+---
+
+## Finding Differentially Methylated Regions in R
+
+[Book chapter: Analyzing DNA methylation data](http://genomicsclass.github.io/book/pages/methylation.html)
+
+Up to now the assessments have focused on characteristics of the human genome related to DNA methylation. Now we are ready to study measurement data. We will be working with a small subset of TCGA data that we have created for illustrative purposes. However, it is real cancer DNA methylation data. Note that we are going to use some of the material we learned in course 3 (Advanced Statistics) and course 4 (Introduction to Bioconductor) If you have not done so already, you will need to install the following library from the github repository:
+
+```{r}
+library(devtools)
+install_github("genomicsclass/coloncancermeth")
+```
+
+Now we can load the library as well as the needed data objects:
+
+```{r}
+library(coloncancermeth)
+data(coloncancermeth)
+dim(meth)
+dim(pd)
+print( gr )
+```
+
+### Finding Differentially Methylated Regions in R Assessment Q1
+
+From `dim(pd)` we can see that there is a total of 26 samples.
+
+How many are cancer samples?
+
+```{r}
+table(pd$Status)
+```
+Which column of the meth matrix is a cancer sample and has BCR patient barcode "TCGA-A6-4107"?
+
+```{r}
+##figure out the column number this way:
+names(pd)[ grep("barcode",names(pd)) ]
+##
+which(pd[,1]=="TCGA-A6-4107" & pd$Status=="cancer")
+```
+
+### Finding Differentially Methylated Regions in R Assessment Q2
+
+Use the methylation profiles to compute a Euclidean distance between each sample.
+
+```{r}
+d = dist( t(meth))
+```
+
+Now use the cmdscale function to create an MDS plot that graphically shows approximate distances between the samples, using color to distinguish cancer and normal samples.
+
+```{r}
+mds = cmdscale(d)
+cols = as.numeric(pd$Status)
+plot(mds,col=cols)
+legend("topleft",levels(pd$Status),col=1:2,pch=1)
+```
+
+Which of the following best describes the MDS plot?
+
+ The DNA methylation profiles appear similar for cancer and normal since the MDS plot shows random scatter.  
+ The MDS plot shows perfect separation between cancer and normal samples in both dimensions.  
+ The MDS plot shows separation between cancer and normal samples, but only in the first dimension. -- correct
+ The second dimension seems to be associated with a large variability within the cancers.  
+ We can't compute distances because methylation data is binary.
+ 
+### Finding Differentially Methylated Regions in R Assessment Q3
+
+For each CpG compute p-values for the cancer versus normal comparison using the limma package:
+
+```{r}
+library(limma)
+X = model.matrix(~pd$Status)
+fit = lmFit(meth,X)
+eb = ebayes(fit)
+pvals = eb$p.value[,2]
+```
+Now use the `qvalue()` function in the qvalue package to obtain q-values.
+
+What proportion of genes have q-values smaller than 0.05?
+
+```{r}
+library(qvalue)
+qvals<-qvalue(pvals)$qvalue
+mean(qvals<0.05)
+
+```
+
+### Finding Differentially Methylated Regions in R Assessment Q4
+
+Before high-throughput technologies were available, cancer epigenetics research focused on searching for CpG islands showings higher levels of methylation in cancer (hypermethylated). Let's explore the data at hand in this regard.
+
+What proportion of the CpGs showing statistically significant differences (defined with q-values in the previous question) are, on average, higher in cancer compared to normal samples?
+
+```{r}
+cpgindex=qvals<0.05
+library(Matrix)
+mean(rowMeans(meth[cpgindex,pd$Status=="cancer"])>rowMeans(meth[cpgindex,pd$Status=="normal"]))
+
+# or (model answer - which uses idea of model coefficients
+# beta1=1 for cancer, 0 for normal)
+
+library(qvalue)
+library(limma)
+X = model.matrix(~pd$Status)
+fit = lmFit(meth,X)
+eb = ebayes(fit)
+pvals = eb$p.value[,2]
+qvals = qvalue(pvals)$qvalue
+
+cpgindex = which(qvals<=0.05)
+diffs = fit$coef[cpgindex,2]
+mean(diffs > 0)
+```
+
+### Finding Differentially Methylated Regions in R Assessment Q5
+
+Now let's determine which of the differentially methylated CpGs are in CpG islands.
+
+Let's review the code we used in a previous assessment:
+
+```{r}
+library(AnnotationHub)
+ah = AnnotationHub()
+cgi = ah[["AH5086"]]
+```
+
+What proportion of the differentially methylated CpGs are inside islands? Hint: use %over%
+
+```{r}
+##We re-run the code from above
+library(qvalue)
+library(limma)
+X = model.matrix(~pd$Status)
+fit = lmFit(meth,X)
+eb = ebayes(fit)
+pvals = eb$p.value[,2]
+qvals = qvalue(pvals)$qvalue
+index = which(qvals<=0.05)
+
+##Now we can see which CpGs are in islands
+mean(gr[index]%over%cgi)
+```
+Note that we can now see the proportions of each combination.
+
+```{r}
+islands=gr[index]%over%cgi
+hypermethylated=fit$coef[index,2]>0
+prop.table( table(islands,hypermethylated) )
+```
+
+### Finding Differentially Methylated Regions in R Assessment Q6
+
+Now we will use the bumphunter package to separate the differentially methylated CpGs into groups.
+
+```{r}
+library(bumphunter)
+X = model.matrix(~pd$Status)
+chr = as.character(seqnames(gr))
+res = bumphunter(meth,X,chr=chr,pos=start(gr),cutoff=0.1)
+```
+
+From here we get a table of regions:
+
+```{r}
+head(res$table)
+```
+
+Note that the bumphunter function has options to assess uncertainty, which are turned on through the B argument. However, these options make this function computationally intensive. We therefore skip this step here and, instead of filtering by statistical significance, filter by region size.
+
+```{r}
+dmrs = res$table[ res$table$L>=3, ]
+```
+
+Note that this table is not a GenomicRanges object, but we can turn it into one easily:
+
+```{r}
+dmrs = makeGRangesFromDataFrame(dmrs)
+```
+
+For the regions in dmrs, find the distance to the closest island (hint: use distanceToNearest).
+
+What proportion of DMRs overlap a CpG island?
+
+```{r}
+map<-distanceToNearest(dmrs,cgi)
+d=mcols(map)$distance
+mean(d==0)
+```
+
+### Finding Differentially Methylated Regions in R Assessment Q7
+
+What proportion of DMRs are within 2000 basepairs from a CpG island, but do not overlap?
+
+```{r}
+map = distanceToNearest(dmrs,cgi)
+d = mcols(map)$distance
+mean(d>0 & d<=2000)
+```

@@ -1,0 +1,312 @@
+---
+title: "Introduction to DNA methylation"
+author: "Michael Hunt"
+date: "April 30, 2016"
+output: html_document
+---
+
+##  DNA Methylation
+
+See, for example  
+[Handy DE, Castro R, Loscalzo J. __Epigenetic Modifications: Basic Mechanisms and Role in Cardiovascular Disease__. Circulation. 2011;123(19):2145-2156. doi:10.1161/CIRCULATIONAHA.110.956839.](http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3107542/)
+
+Good tutorial on [Biostrings: ](https://web.stanford.edu/class/bios221/labs/biostrings/lab_1_biostrings.html)
+
+### DNA Methylation Assessment Q1
+
+In this class we will be using Bioconductor tools extensively. We assume that you know the material covered in the Bioconductor course.
+
+Make sure you install the version of Bioconductor that is linked to R version 3.2.4.
+
+```{r}
+source("http://www.bioconductor.org/biocLite.R")
+biocLite()
+```
+Use the biocVersion function in the BiocInstaller package to determine what version of Bioconductor you are running.
+
+```{r}
+library(BiocInstaller)
+biocVersion()
+```
+
+### DNA Methylation Assessment Q2
+
+You will have to install several Bioconductor packages for this class. You will use biocLite to install these when you have not done so already or if you need to update them. For example, to install the minfi package type:
+
+```{r}
+biocLite("minfi")
+```
+
+What is the version of minfi you just installed (hint: use packageVersion function)? Report the major and minor numbers only, e.g. for minfi version x.y.z, report x.y
+
+```{r}
+packageVersion("minfi")
+```
+
+### DNA Methylation Assessment Q3
+
+Which of the following studies is most likely to be conducted by Epigenetics research group?
+
+ Determining which changes in DNA are associated with disease.  
+ Predicting genes based on the analysis of sequence data.  
+ Determining why a gene is consistently expressed in one tissue, but not in others. - correct   
+ Understanding the atomic forces involved in adding a methyl group to substrate.  
+
+
+DNA methylation and other epigenetic outcomes are considered to play a major part in controlling gene expression.  
+
+### DNA Methylation Assessment Q4
+
+Which of the following is least likely to change during the process in which a stem cell becomes a white blood cell?
+
+ CpG methylation  
+ Genome sequence - correct  
+ Gene expression levels  
+ The three dimensional structure of genome  
+
+
+DNA sequence is relatively stable in cell development. In fact, all somatic cells in our bodies are believe to have almost identical DNA.  
+
+### DNA Methylation Assessment Q5
+
+Download and install the human genome package BSgenome.Hsapiens.UCSC.hg19. Define the following sequence:
+
+```{r}
+library(BSgenome.Hsapiens.UCSC.hg19)
+chr22 = Hsapiens[["chr22"]]
+s = subseq(chr22,start=23456789,width=1000)
+print( as.character(s) )
+```
+
+What is the GC-content of s (give answer as a proportion)
+
+```{r}
+sum( alphabetFrequency(s)[c("C","G")] ) / 1000
+# or
+letterFrequency(s, "CG", as.prob=TRUE)
+```
+See: [Biostrings in R](https://web.stanford.edu/class/bios221/labs/biostrings/lab_1_biostrings.html)
+
+### DNA Methylation Assessment Q6
+
+How many CpGs in `s` (as defined in the previous question)
+
+```{r}
+countPattern("CG",s)
+```
+
+### DNA Methylation Assessment Q7
+
+How many GpCs (G followed by C) in `s` (as defined in the previous question)
+
+```{r}
+countPattern("GC",s)
+```
+
+## CpG islands
+
+### CpG islands Assessment Q1
+
+In the video we briefly described an algorithm that defines CpG islands. This algorithm has been used to create a list that is available in most genomic annotation data bases.
+
+The Bioconductor package AnnotationHub package permits us to explore available annotations. By typing the following commands we can see what is available:
+
+```{r}
+library(AnnotationHub)
+ah = AnnotationHub()
+head(ah)
+```
+We can then subset these to just the databases related to the hg19 genome:
+
+```{r}
+ah = subset(ah,ah$genome=="hg19")
+```
+We can then use the query function to search the available annotations in this "hub". For example:
+
+```{r}
+query(ah,"genes")
+```
+On the left you see the record IDs for annotationHub.
+
+What is the record ID used by AnnotationHub for hg19 CpG Islands? Hint use query on the object ah we created above
+
+```{r}
+query(ah, "cpg Islands")
+##or
+query(ah,"cpg")
+## or 
+query(ah,"Islands")
+```
+
+### CpG islands Assessment Q2
+
+Use AnnotationHub to create an R object representing CpG Islands:
+
+```{r}
+library(AnnotationHub)
+ah = AnnotationHub()
+cgi = ah[["AH5086"]]
+```
+
+What is the class of the object cgi (hint: use class function)?
+
+```{r}
+class(cgi)
+```
+
+### CpG islands Assessment Q3
+
+How many CpG islands are represented in the object cgi defined in the previous question?
+
+```{r}
+length(cgi)
+```
+
+### CpG islands Assessment Q4
+
+We can extract the sequence of each CpG Islands this way:
+
+```{r}
+library(BSgenome.Hsapiens.UCSC.hg19)
+cgiseq= getSeq(Hsapiens,cgi)
+```
+Note that it is indispensable that we assure the same genome builds are being used here:
+
+```{r}
+genome(cgi)[1:24]
+genome(Hsapiens)[1:24]
+```
+
+We will use this to determine the observed to expected ratio described in the video.
+
+Compute the proportion of Cs for each island and report the median of these proportions (hint: use the alphabetFrequency function).
+
+```{r}
+res = alphabetFrequency(cgiseq)
+L = rowSums(res)
+cprop = res[,"C"]/L
+median(cprop)
+# or
+median(letterFrequency(cgiseq, "C", as.prob=TRUE))
+# Make a histogram to see they are generally high
+hist(cprop)
+```
+
+### CpG islands Assessment Q5
+
+Compute the proportion of Gs for each island and report the median of these proportions.
+
+
+```{r}
+res = alphabetFrequency(cgiseq)
+L = rowSums(res)
+gprop = res[,"G"]/L
+median(gprop)
+# or
+median(letterFrequency(cgiseq, "G", as.prob=TRUE))
+# Make a histogram to see they are generally high
+hist(gprop)
+```
+
+### CpG islands Assessment Q6
+
+Now that for each CpG island we have the proportion of Cs $p_C$ and the proportion of Gs $p_G$ we can compute the proportion of CG we expect to see by chance if all dinucleotides have the same probability of appearing. To a close approximation this expected proportion is simply $p_C\times p_G$.
+
+The number of CpGs that we expect to see in a genomic interval of size $L$ is then $L\times p_C\times p_G$. Once we have this expectation we can compute the observed to expected ratio.
+
+Compute the expected number of CpGs in each CpG island using the formula. For each island divide the observed number of CpGs by the expected number of CpGs.
+
+Report the median of these observed to expected ratios (hint: use the vcountPattern function to get the number of CpGs in each island).
+
+```{r}
+res = alphabetFrequency(cgiseq)
+L = rowSums(res)
+cprop = res[,"C"]/L
+gprop = res[,"G"]/L
+expected=L*cprop*gprop
+observed=vcountPattern("CG",cgiseq)
+cpgoe=observed/expected
+median(cpgoe)
+## We can look at a histogram
+hist(cpgoe)
+abline(v=1,col=2)
+##because these are ratios, better to look at log
+hist(log2 ( cpgoe ))
+abline(v=0,col=2)
+```
+We see that the ratio is less than one for most islands
+
+```{r}
+mean(cpgoe[log2(cpgoe)<0])
+```
+
+### CpG islands Assessment Q7
+
+(1 point possible)
+Repeat the entire exercise for GC instead of CG. What is the median observed to expected ratio?
+
+```{r}
+res = alphabetFrequency(cgiseq)
+L = rowSums(res)
+cprop = res[,"C"]/L
+gprop = res[,"G"]/L
+expected=L*cprop*gprop
+observed=vcountPattern("GC",cgiseq)
+gpcoe=observed/expected
+median(gpcoe)
+## We can look at a histogram
+##because these are ratios, better to look at log
+hist(log2 ( gpcoe ))
+abline(v=0,col=2)
+mean(gpcoe[log2(gpcoe)<0])
+```
+Compare CpG aand GpC ratios with a box plot
+
+```{r}
+boxplot(list(cpgoe,gpcoe))
+```
+
+### CpG islands Assessment Q8
+
+Note that the CpG observed to expected ratio is below 1 and that few islands actually surpass a ratio of 1 or more. However, for the rest of the genome the observed to expected ratio is substantially smaller. To look at regions that are not islands let's shift the islands we have by 20,000.
+
+To avoid problems with short sequences, we will restrict our analysis to the mapped chromosomes:
+
+```{r}
+chr2use = seqlevels(cgi)[1:24]
+index = which( seqnames(cgi) %in% chr2use)
+```
+
+And define the non CpG islands by shifting the known ones by 20K.
+
+```{r}
+noncgi = shift(cgi[index],20000)
+```
+
+Some of these regions contain repeats or are unmapped so we remove regions that have 0 Cs or 0 Gs:
+
+```{r}
+library(BSgenome.Hsapiens.UCSC.hg19)
+noncgiseq= getSeq(Hsapiens,noncgi)
+
+nullres = alphabetFrequency(noncgiseq)
+keepIndex=nullres[,"G"]>0 &  nullres[,"C"]>0 & nullres[,"N"]==0
+nullres = nullres[keepIndex,]
+noncgiseq=noncgiseq[keepIndex]
+```
+
+Use nullres and noncgiseq defined above to compute the expected number of CpGs we should see in each of the regions. Report the median observed to expected ratio for these regions?
+
+```{r}
+L2 = rowSums(nullres)
+cprop2 = nullres[,"C"]/L2
+gprop2 = nullres[,"G"]/L2
+expected2=L2*cprop2*gprop2
+observed2=vcountPattern("CG",noncgiseq)
+noncgioe=observed2/expected2
+median(noncgioe)
+```
+We can compare them all
+```{r}
+boxplot(gpcoe,noncgioe,cpgoe)
+```
