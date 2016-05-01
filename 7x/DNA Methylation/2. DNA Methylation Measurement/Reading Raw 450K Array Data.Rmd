@@ -22,7 +22,8 @@ The first step is to determine the basename of the idat files you have just down
 
 ```{r}
 #path = "/Users/ririzarr/myDocuments/teaching/HarvardX/rawdata/idats/"
-path="C:/Users/Mike/RSpace/PH525rawdata/idats"
+#path="C:/Users/Mike/RSpace/PH525rawdata/idats"
+path="C:/temp/RSpace/PH525rawdata/idats"
 list.files(path)
 ```
 ...you should see a list of .idat files and one targets.csv file
@@ -73,7 +74,7 @@ This performs the default preprocessing algorithm developed by Illumina. However
 
 ```{r}
 library(minfi)
-mset = mapToGenome(mset,what="beta")
+mset = mapToGenome(mset)
 ```
 
 Now we are ready to obtain the methylation values and CpG locations.
@@ -83,6 +84,20 @@ dim(getBeta(mset,type="Illumina")) ##the argument type="Illumina" gives us defau
 head(granges(mset))
 ```
 If we use the Illumina approach to estimating methylation values, what is the estimate of the CpG at location 153807318 on chr4 for sample "5775041068_R04C01"
+
+```{r}
+cpg<-GRanges(seqnames="chr4",ranges=153807318)
+index<-subjectHits(findOverlaps(cpg,granges(mset)))
+gene<-names(granges(mset)[index])
+getBeta(mset,type="Illumina")[gene,"5775041068_R04C01"]
+```
+
+```{r}
+# model answer
+i = which(seqnames(granges(mset))=="chr4" & start(granges(mset))==153807318)
+j = which(rownames(pData(mset))=="5775041068_R04C01")
+getBeta(mset,type="Illumina")[i,j]
+```
 
 ### Reading Raw 450K Array Data Assessment Q3
 
@@ -129,6 +144,12 @@ Run bumphunter as determined in the previous assessment question.
 
 What is the "area" of the first DMR listed in the DMR table returned by bumphunter?  
 
+```{r}
+tab<-res$table
+head(tab)
+tab$area[1]
+```
+
 ### Reading Raw 450K Array Data Assessment Q5
 
 The default behavior for bumphunter is not to smooth the data. Here we will learn how to run bumphunter with smoothing. However to make the code run faster we will only run in on chr22. To do this we first subset grset:
@@ -158,10 +179,19 @@ Now we run it with smoothing
 res2 = bumphunter(grset2,X,cutoff=0.25,smooth=TRUE)
 ```
 
-Which best characterizes the difference between the DMRs in res and res2
+Which best characterizes the difference between the DMRs in res and res2?  
 
-?
-res has more DMRs and res2 has longer DMRs.  
+res has more DMRs and res2 has longer DMRs.-- correct
 res2 has more DMRs and res has longer DMRs.  
 res and res2 are practically the same  
 res2 is a subset of res  
+
+```{r}
+tab<-res$table
+head(tab)
+nrow(tab)
+tab2<-res2$table
+head(tab2)
+nrow(tab2)
+
+```
