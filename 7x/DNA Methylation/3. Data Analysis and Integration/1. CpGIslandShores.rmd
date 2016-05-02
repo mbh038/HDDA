@@ -1,6 +1,123 @@
 ---
-title: ": CpGIslandShores"
+title: "Data Analysis and Integration: CpGIslandShores"
 author: "Michael Hunt"
 date: "May 1, 2016"
 output: html_document
 ---
+
+Book chapter:[Inference for DNA methylation data](http://genomicsclass.github.io/book/pages/inference_for_DNAmeth.html)
+
+Path name to folder where we have stored the TCGA data that we downloaded from [here](https://github.com/genomicsclass/tcgaMethylationSubset)
+
+```{r}
+path="C:/temp/RSpace/PH525rawdata/PH525tcgaMethylationSubset-master"
+list.files(path)
+```
+
+load these Bioconductor packages:
+
+```{r}
+library(minfi)
+library(IlluminaHumanMethylation450kmanifest)
+library(IlluminaHumanMethylation450kanno.ilmn12.hg19)
+```
+
+### CpGIslandShores Assessment Q1
+
+Read in the sample annotation table:
+
+```{r}
+#path="/YourPath"
+targets=read.delim(file.path (path,"targets.txt"),as.is=TRUE)
+```
+
+How many samples are represented in this table?
+
+```{r}
+nrow(targets)
+```
+
+### CpGIslandShores Assessment Q2
+
+How many samples are from normal colon samples?
+
+```{r}
+nrow(targets[targets$Status=="normal" & targets$Tissue=="colon",])
+# or
+sum(targets$Tissue=="colon" & targets$Status=="normal")
+##or look here
+table(targets$Tissue,targets$Status)
+```
+
+### CpGIslandShores Assessment Q3
+
+For the next question we will read in breast and colon normal samples:
+
+```{r}
+index = which( targets$Status=="normal" & targets$Tissue%in%c("colon","breast") )
+targets = targets[index,]
+```
+
+Now we are ready to read in the data (this will take about 2 minutes):
+
+```{r}
+library(minfi)
+dat = read.450k.exp(base=path,targets = targets, verbose=TRUE)
+```
+
+dat includes the raw data. To convert this into an object that includes methylation values, as well as the location of CpGs, we do the following (we show you the class of dat as we transform it):
+
+```{r}
+class(dat)
+## preprocess the data
+dat = preprocessIllumina(dat)
+class(dat)
+## assign locations to each CpG
+dat = mapToGenome(dat)
+class(dat)
+## precompute methylation values from U and M values
+dat = ratioConvert(dat,type="Illumina")
+class(dat)
+```
+
+Before we start we can create some quality assessment plots. First look at the distribution of each sample:
+
+```{r}
+library(rafalib)
+mypar(1,1)
+##extract methylation values
+y = getBeta(dat)
+shist(y)
+```
+
+Note that the distributions seem similar. Nothing stands out.
+
+We also create an MDS plot to search for outlier samples. The first PC splits the data by tissue as expected and no sample stands out as an outlier.
+
+```{r}
+mds = cmdscale( dist(t(y)))
+tissue = as.factor(pData(dat)$Tissue)
+plot(mds,col=tissue)
+```
+
+Now we are ready to use statistical inference to find differentially methylated regions. Let's start by using the limma package to perform a site-by-site analysis.
+
+```{r}
+library(limma)
+##create design matrix
+tissue = as.factor(pData(dat)$Tissue)
+X = model.matrix(~tissue)
+##extract methylation values
+y = getBeta(dat)
+## obtain effect sizes and pvals with limma
+fit = lmFit(y,X)
+```
+
+Find the CpG with the largest effect size when comparing the two tissues. What chromosome is it on?
+
+```{r}
+eb<-ebayes(fit)
+maxes<-which.max(fit$coefficients[,2])
+#pData(dat)$rownames
+
+```
