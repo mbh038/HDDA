@@ -10,7 +10,8 @@ Book chapter:[Inference for DNA methylation data](http://genomicsclass.github.io
 Path name to folder where we have stored the TCGA data that we downloaded from [here](https://github.com/genomicsclass/tcgaMethylationSubset)
 
 ```{r}
-path="C:/temp/RSpace/PH525rawdata/PH525tcgaMethylationSubset-master"
+#path="C:/temp/RSpace/PH525rawdata/PH525tcgaMethylationSubset-master"
+path="H:/RSpace/PH525rawdata/PH525tcgaMethylationSubset-master"
 list.files(path)
 ```
 
@@ -116,8 +117,225 @@ fit = lmFit(y,X)
 Find the CpG with the largest effect size when comparing the two tissues. What chromosome is it on?
 
 ```{r}
-eb<-ebayes(fit)
 maxes<-which.max(fit$coefficients[,2])
-#pData(dat)$rownames
+granges(dat)[maxes]
+
+# model answer
+
+index = which.max(abs( fit$coef[,2]))
+seqnames(dat)[index]
+start(dat)[index]
+```
+
+### CpGIslandShores Assessment Q4
+
+Now we will use the qvalue function to determine the q-value for the CpG found in the previous question.
+
+```{r}
+library(qvalue)
+##create design matrix
+tissue = as.factor(pData(dat)$Tissue)
+X = model.matrix(~tissue)
+##extract methylation values
+y = getBeta(dat)
+## obtain effect sizes and pvals with limma
+fit = lmFit(y,X)
+eb = ebayes(fit)
+## obtain q-values
+qvals = qvalue(eb$p.value[,2])$qvalue
+```
+
+What is the q-value for this CpG?
+
+```{r}
+##When reporting such small p-values there is no need to show exactly how small it is
+## so we can say < 10^-6
+index = which.max(abs( fit$coef[,2]))
+qvals[index]
+```
+
+### CpGIslandShores Assessment Q5
+
+For this problem, we will use the location of the CpG discussed in the previous two questions. 
+
+Find all the CpGs within 5000 basepairs of the location of this CpG. 
+
+Create a plot showing the methylation values for all samples for these CpGs. Use color to distinguish breast from colon.
+
+
+Based on these plots, which best describes this region?
+
+ There are differences between colon and breast for all CpGs.  
+ No CpGs appear to be different here.  
+ A region of about 1000 base pairs appears to be different.  --  correct
+ All the CpGs are unmethylated
+ 
+```{r}
+# model answer
+
+library(rafalib)
+mypar2(3,1)
+index = which.max(abs( fit$coef[,2]))
+gr=granges(dat)[index]+5000
+index=which(granges(dat)%over%gr)
+pos= start(dat)[index]
+
+matplot(pos,y[index,],ylab="Methylation",col=as.numeric(tissue))
+
+plot(pos, fit$coef[index,2],ylab="Effect Size")
+
+plot(pos, -log10(qvals[index]) ,ylab="-log10 q-value")
 
 ```
+ 
+### CpGIslandShores Assessment Q6
+
+Repeat the above exercise, but now make the same plots for the top 10 CpGs ranked by absolute value of effect size. You can get the order like this:
+
+```{r}
+library(rafalib)
+mypar(3,1)
+o = order(abs(fit$coef[,2]), decreasing = TRUE)[1:10]
+for(i in o){
+  index = i
+  gr=granges(dat)[index]+5000
+  index=which(granges(dat)%over%gr)
+  pos= start(dat)[index]
+
+  matplot(pos,y[index,,drop=FALSE],ylab="Methylation",col=as.numeric(tissue))
+
+  plot(pos, fit$coef[index,2],ylab="Effect Size")
+
+  plot(pos, -log10(qvals[index]) ,ylab="-log10 q-value")
+}
+```
+
+How would you describe these plots?
+
+ They show only the one CpG in the top 10 as differentially methylated.  
+ For most plots we see groups of CpGs that are differentially methylated.  -- correct
+ We can hardly see differences between the two tissues.  
+ The between tissue variability is too large.
+ 
+### CpGIslandShores Assessment Q7
+
+Now we are going to explicitly search for regions using the bumphunter function. We will use permutation to assess statistical significance. Because the function is slow, we will restrict our analysis to chromosome 15.
+
+```{r}
+index= which(seqnames(dat)=="chr15")
+dat2 = dat[index,]
+```
+
+If your computer has more than one core, you can use parallel computing to speed up the procedure.
+
+```{r}
+library(doParallel)
+ncores = detectCores()
+registerDoParallel(cores = ncores)
+```
+
+We can now run the bumphunter function to find differentially methylated regions (DMR). For this assessment question we will use 100 permutations, although we recommend more in practice. Here we will use a cutoff of 0.1. The permutations are random so make sure you set seed to 1 to obtain exact results in the assessment question.
+
+```{r}
+##create design matrix
+tissue = as.factor(pData(dat)$Tissue)
+X = model.matrix(~tissue)
+##extract methylation values
+set.seed(1)
+res = bumphunter(dat2,X,cutoff=0.1,B=100)
+head(res$tab)
+```
+
+According to these results, how many regions achieve an FWER lower than 0.05?
+
+```{r}
+sum(res$table$fwer < 0.05)
+```
+
+### CpGIslandShores Assessment Q8
+
+Previously we performed a CpG by CpG analysis and obtained qvalues. Create an index for the CpGs that achieve qvalues smaller than 0.05 and a large effect size larger than 0.5 (in absolute value):
+
+```{r}
+##fit and qvals were defined in a previous answer
+index = which(qvals < 0.05 & abs(fit$coef[,2]) > 0.5 & seqnames(dat)=="chr15")
+```
+
+Now create a table of the DMRs returned by bumphunter that had 3 or more probes and convert the table into GRanges:
+
+```{r}
+tab = res$tab[ res$tab$L >= 3,]
+tab = makeGRangesFromDataFrame(tab)
+```
+
+What proportion of the CpGs indexed by index are inside regions found in tab (hint use the findOverlaps function in the GenomicRanges package)?
+
+```{r}
+length(findOverlaps(dat[index,],tab))/length(index)
+#or (model answer:
+mean(granges(dat[index,])%over%tab)
+```
+
+### CpGIslandShores Assessment Q9
+
+
+Now download the table of CGI using AnnotationHub.
+
+```{r}
+library(AnnotationHub)
+cgi = AnnotationHub()[["AH5086"]]
+```
+
+Now we create a GRanges object from the list of DMRs we computed in the previous questions:
+
+```{r}
+tab = res$tab[res$tab$fwer <= 0.05,]
+tab = makeGRangesFromDataFrame(tab)
+```
+
+What proportion of the regions represented in tab do not overlap islands, but overall CpG islands shores (within 2000 basepairs) ? Hint: use the distanceToNearest
+
+```{r}
+map = distanceToNearest(tab,cgi)
+d = mcols(map)$distance
+mean(d>0 & d<=2000)
+```
+
+### CpGIslandShores Assessment Q10
+
+Here we are going to study the relationship between gene expression and DNA methylation by integrating gene expression and DNA methylation high throughput data. We will compare colon and lung samples.
+
+```{r}
+path=path
+targets=read.delim(file.path (path,"targets.txt"),as.is=TRUE)
+index = which( targets$Status=="normal" & targets$Tissue%in%c("colon","lung") )
+targets = targets[index,]
+```
+
+Now we are ready to read in the data (this will take about 2 minutes):
+
+```{r}
+library(minfi)
+dat = read.450k.exp(base=path,targets = targets, verbose=TRUE)
+```
+
+We convert this data as previously done.
+
+```{r}
+## preprocess the data
+dat = preprocessIllumina(dat)
+dat = mapToGenome(dat)
+dat = ratioConvert(dat,type="Illumina")
+```
+
+Now run the bumphunter function with cutoff=0.25 and default parameters.
+
+```{r}
+library(bumphunter)
+tissue=pData(dat)$Tissue
+X = model.matrix(~tissue)
+res = bumphunter(dat,X,cutoff=0.25)
+nrow(res$tab)
+```
+  
+What proportion of regions are just one CpG?
