@@ -1,5 +1,5 @@
 ---
-title: "Data Analysis and Integration: CpGIslandShores"
+title: "Data Analysis and Integration: 1. CpGIslandShores"
 author: "Michael Hunt"
 date: "May 1, 2016"
 output: html_document
@@ -10,9 +10,9 @@ Book chapter:[Inference for DNA methylation data](http://genomicsclass.github.io
 Path name to folder where we have stored the TCGA data that we downloaded from [here](https://github.com/genomicsclass/tcgaMethylationSubset)
 
 ```{r}
-#path="C:/temp/RSpace/PH525rawdata/PH525tcgaMethylationSubset-master"
-path="H:/RSpace/PH525rawdata/PH525tcgaMethylationSubset-master"
-list.files(path)
+#mypath="C:/temp/RSpace/PH525rawdata/PH525tcgaMethylationSubset-master"
+mypath="H:/RSpace/PH525rawdata/PH525tcgaMethylationSubset-master"
+list.files(mypath)
 ```
 
 load these Bioconductor packages:
@@ -29,7 +29,7 @@ Read in the sample annotation table:
 
 ```{r}
 #path="/YourPath"
-targets=read.delim(file.path (path,"targets.txt"),as.is=TRUE)
+targets=read.delim(file.path (mypath,"targets.txt"),as.is=TRUE)
 ```
 
 How many samples are represented in this table?
@@ -63,7 +63,7 @@ Now we are ready to read in the data (this will take about 2 minutes):
 
 ```{r}
 library(minfi)
-dat = read.450k.exp(base=path,targets = targets, verbose=TRUE)
+dat = read.450k.exp(base=mypath,targets = targets, verbose=TRUE)
 ```
 
 dat includes the raw data. To convert this into an object that includes methylation values, as well as the location of CpGs, we do the following (we show you the class of dat as we transform it):
@@ -339,3 +339,72 @@ nrow(res$tab)
 ```
   
 What proportion of regions are just one CpG?
+
+
+### CpGIslandShores Assessment Q11
+
+Now we are going to match these regions to genes. First load the expression related data. Note that this will load an object called tcgaLungColonExpLM which is the result of a differential expression analysis using limma on TCGA rawdata:
+
+```{r}
+path=mypath
+load(file.path(path,"tcgaLungColonExpLM.rda"))
+class(tcgaLungColonExpLM)
+```
+
+Note that we saved the annotation of the gene expression array in this object:
+
+```{r}
+print( annotation )
+```
+  
+We can obtain q-values using the qvalue package.
+
+```{r}
+library(limma)
+library(qvalue)
+eb=ebayes(tcgaLungColonExpLM)
+qvals=qvalue(eb$p.value[,2])$qvalue
+```
+
+Now we have to obtain locations for these genes. We will use one of the techniques we learned in course 4. Note: you will need to install the hgu133plus2.db and Homo.sapiens packages from Bioconductor if you have not already.
+
+```{r}
+library(hgu133plus2.db)
+map=select(hgu133plus2.db,keys=rownames(tcgaLungColonExpLM$coef),columns=c("ENTREZID"),keytype="PROBEID")
+
+library(Homo.sapiens)
+Genes=genes(Homo.sapiens)
+Genes=resize(Genes,1) ## we want the tss
+
+index1=match(as.character(mcols(Genes)$GENEID),map$ENTREZID)
+index2 = match(map$PROBEID[index1],rownames(tcgaLungColonExpLM$coef))
+M = tcgaLungColonExpLM$coef[index2,2]
+```
+
+M is now in the same order as Genes. We can now find the closest gene to each DMR.
+
+```{r}
+tab=makeGRangesFromDataFrame(res$tab,keep.extra.columns = TRUE)
+map2=distanceToNearest(tab,Genes)
+```
+
+Now we can make plots comparing the methylation differences to the gene expression differences. We consider DMRs of different size
+
+```{r}
+index1=subjectHits(map2)
+dist = mcols(map2)$dist
+
+library(rafalib)
+mypar(2,2)
+for(i in c(0,1,2,3)){
+  keep = dist< 10000 & tab$L>i
+  plot(tab$value[keep],M[index1][keep],main=paste("cor=",signif(cor(tab$value[keep],M[index1][keep],use="complete"),2)))
+}
+```
+
+What does this figure show?
+
+ There is a positive correlation between gene expression and DNA methylation  
+ There is a negative correlation between gene expression and DNA methylation and it is stronger for larger DMRs  
+ There is a netgative correlation between gene expression and DNA methylation and no relation ship to size of DMR  
+ There is a no correlation between gene expression and DNA methylation

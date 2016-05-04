@@ -1,0 +1,81 @@
+---
+title: "Data Analysis and Integration: 3.Blocks"
+author: "Michael Hunt"
+date: "May 4, 2016"
+output: html_document
+---
+
+Path name to folder where we have stored the TCGA data that we downloaded from [here](https://github.com/genomicsclass/tcgaMethylationSubset)
+
+```{r}
+#path="C:/temp/RSpace/PH525rawdata/PH525tcgaMethylationSubset-master"
+mypath="H:/RSpace/PH525rawdata/PH525tcgaMethylationSubset-master"
+list.files(mypath)
+```
+
+### Blocks Assessment Q1
+
+We will search for differentially methylated blocks
+
+```{r}
+library(minfi)
+path="mypath"
+targets=read.delim(file.path (path,"targets.txt"),as.is=TRUE)
+index = which( targets$Tissue=="colon")
+targets = targets[index,]
+dat = read.450k.exp(base=path,targets = targets, verbose=TRUE)
+```
+
+`dat` includes the raw data. To convert this into an object that includes methylation values, as well as the location of CpGs, we do the following (we show you the class of `dat` as we transform it):
+
+```{r}
+dat = preprocessIllumina(dat)
+dat = mapToGenome(dat)
+Now we can collapse the data as described in the video:
+cdat = cpgCollapse(dat)
+```
+
+The original data includes
+
+```{r}
+nrow(dat)
+```
+CpGs.
+
+How many regions are represented in the collapsed object?
+
+Hint: make sure to study the class of the cdat.
+
+
+### Blocks Assessment Q2
+
+
+We can see the type of regions that are represented in this collapsed object:
+
+```{r}
+head(granges(cdat$obj))
+```
+
+Note that the type column has this information.
+
+What proportion of the regions are OpenSea regions?
+
+
+### Blocks Assessment Q3
+
+Now we use the blockFinder function to find differentially methylated regions between cancer and normal:
+
+```{r}
+status = factor(pData(cdat$obj)$Status,
+                level=c("normal","cancer"))
+X=model.matrix(~status)
+res = blockFinder(cdat$obj,X,cutoff=0.05)
+```
+
+blockFinder calls bumphunter and returns a similar object. We can see the blocks:
+
+```{r}
+head(res$table)
+```
+
+What proportion of the blocks reported in res$table are hypomethyated (lower methylation in cancer versus normal)?dded to the code chunk to prevent printing of the R code that generated the plot.
