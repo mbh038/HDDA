@@ -1,30 +1,174 @@
 ---
-title: "Measuring Methylation from Sequencing"
+title: "Whole Genome Analysis: Measuring Methylation from Sequencing"
 author: "Michael Hunt"
 date: "May 1, 2016"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+### Measuring Methylation from Sequencing Q1
+
+Reduced Representation Bisulfite Sequencing or RRBS is an experimental technique widely used to manipulate the regions of the genome we measure. An enzyme is used to cut DNA at CCGG and the general idea is to filter out small or large molecules once DNA is cut. We can use Bioconductor tools to predict the size of these regions.
+
+Load the genome package and create an object with the sequence for chr22:
+
+```{r}
+library("BSgenome.Hsapiens.UCSC.hg19")
+chr22 = Hsapiens[["chr22"]]
 ```
 
-## R Markdown
+Now use the `matchPattern` function to find all the locations in which CCGG occurs on chr22.
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+How many CCGG do we find on chr22?
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r}
+res=matchPattern("CCGG",chr22)
+length(res)
 ```
 
-## Including Plots
+### Measuring Methylation from Sequencing Q2
 
-You can also embed plots, for example:
+(1 point possible)
+Plot a histogram of the DNA fragment sizes after we cut with CCGG. How would you describe this distribution?
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+size=diff(start(res))
+hist(log10(size))
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+ The fragment sizes are normal distributed.  
+ The fragment size follow an exponential distribution.  
+ The distribution has a long right tail with most values from 0-1000, but some very large values.  -- correct
+ The fragment sizes follow a uniform distribution.
+ 
+### Measuring Methylation from Sequencing Q3
+
+A typical size to filter are DNA regions between 40 and 220 basepairs.
+
+What proportion of the fragments created for chr22 are between 40 and 220 basepairs?
+
+```{r}
+mean(size>=40 & size<=220)
+```
+
+### Measuring Methylation from Sequencing Q4
+
+If we sequence all of chromosome 22 we need to sequence 51,304,566 bases. However, if instead we keep only fragments of size between 40 and 220 basepairs, how much sequence would would be left?
+
+```{r}
+sum(size[size>=40 & size<=220])
+```
+
+### Measuring Methylation from Sequencing Q5
+
+We will use a set of paired tumor and normal colon whole-genome bisulfite sequencing (WGBS) data. You can download the data we will use from [our github repo](https://github.com/genomicsclass/colonCancerWGBS) (~40 Mb). More information about these data is available on [GEO GSE46644](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE46644). Here we use the `.cov` files from Bismark as input to the `bsseq` R/Bioconductor package to create a `bsseq` object. The data come from [this paper](http://www.ncbi.nlm.nih.gov/pubmed/23925113).
+
+The step-by-step instruction prepared by Stephanie Hicks on how to covert the raw fastq files into the files we work on [here](https://github.com/genomicsclass/colonCancerWGBS/blob/master/scripts/createObject.Rmd).
+
+Let's start by the reading in the target information.
+
+```{r}
+path = "H:/RSpace/PH525rawdata/colonCancerWGBS/"
+targets = read.table(file.path(path,"targets.txt"), header = TRUE, sep = "\t")
+targets
+```
+
+Now you will need the `bsseq` package to read in the sequencing data.
+
+We load the methylation calls from our alignments into R. Once the data are loaded into R, we can use this package for further downstream analyses such as finding differentially methylated regions between our paired tumor and normal colon cancer samples. This package assumes the following data has been extracted from the alignments.
+
+1. genomic positions (chromosome and location) for methylation loci
+
+2. `M` (Methylation) values, describing the number of read supporting methylation covering a single loci
+
+3. `Cov` (Coverage) values, describing the number of read supporting methylation covering a single loci
+
+For illustrative purposes, we only consider the methylation loci in chromosome 22 from the `.cov` file.
+
+Here read in the six files:
+
+```{r}
+library("bsseq")
+cov.files = list.files(path=path,pattern="*chr22.cov",full.names=TRUE)  # coverage files
+colonCancerWGBS =read.bismark(files=cov.files, rmZeroCov=TRUE, sampleNames = as.character(targets$Run))
+# add sample information to object
+colData(colonCancerWGBS) = DataFrame(targets)
+###Note you might see a warning message here. You can ignore.
+```
+
+To view the bsseq object and the phenotypic information about each sample:
+
+```{r}
+colonCancerWGBS
+
+# phenotypic information
+pData(colonCancerWGBS)
+
+# granges object
+granges(colonCancerWGBS)
+```
+
+Now we can extract the coverage and the number of reads with evidence from methylation:
+
+```{r}
+cov=getCoverage(colonCancerWGBS,type = "Cov")
+m=getCoverage(colonCancerWGBS,type = "M")
+```
+
+What proportion of the reported CpGs have some coverage in all sample?
+
+```{r}
+mean(apply(cov,1,min)>0)
+#or
+index=apply(cov>0,1,all)
+mean(index)
+```
+
+### Measuring Methylation from Sequencing Q6
+
+
+Compute the total coverage (across all samples) for each CpG. Plot it against location.
+
+```{r}
+totalc=apply(cov,1,sum)
+plot(start(granges(colonCancerWGBS)),log10(totalc+1))
+abline(log10(300),0,col="red")
+abline(log10(200),0,col="blue")
+hist(log10(totalc+1))
+```
+
+How would you describe coverage?
+
+ Appears uniform across chr22  
+ Has some very large values (>200) as well as general varaibility  -- correct
+ Is 0 for most location  
+ Is above 300 for most locations
+ 
+```{r}
+# model answer
+tot = rowSums(cov)
+##there are some very large values
+hist(tot)
+loc= start(colonCancerWGBS)
+##plot by pieces
+for(i in 1:11){
+  index=1:100000+100000*i ##very ad-hoc
+  plot(loc[index],tot[index],cex=.5,ylim=c(0,300))
+}
+```
+
+### Measuring Methylation from Sequencing Q7
+
+Note that we can get coverage and the number of reads including evidence for methylation like this:
+
+```{r}
+cov=getCoverage(colonCancerWGBS,type = "Cov")
+m=getCoverage(colonCancerWGBS,type = "M")
+```
+
+Assuming cov>0, which of the following pairs gives us 1) an estimate of methylation status at each CpG and 2) a quantity proportional to the standard error of this estimate?
+
+ m and cov  
+ m/cov and 1/sqrt(cov)  
+ m/cov and sqrt(cov)  
+ cov and m

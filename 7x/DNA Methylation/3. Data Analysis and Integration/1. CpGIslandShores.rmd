@@ -174,7 +174,7 @@ Based on these plots, which best describes this region?
 # model answer
 
 library(rafalib)
-mypar2(3,1)
+mypar(3,1)
 index = which.max(abs( fit$coef[,2]))
 gr=granges(dat)[index]+5000
 index=which(granges(dat)%over%gr)
@@ -306,7 +306,7 @@ mean(d>0 & d<=2000)
 Here we are going to study the relationship between gene expression and DNA methylation by integrating gene expression and DNA methylation high throughput data. We will compare colon and lung samples.
 
 ```{r}
-path=path
+path=mypath
 targets=read.delim(file.path (path,"targets.txt"),as.is=TRUE)
 index = which( targets$Status=="normal" & targets$Tissue%in%c("colon","lung") )
 targets = targets[index,]
@@ -339,6 +339,21 @@ nrow(res$tab)
 ```
   
 What proportion of regions are just one CpG?
+
+```{r}
+tab<-makeGRangesFromDataFrame(res$tab,keep.extra.columns=TRUE)
+hits<-subjectHits(findOverlaps(dat,tab))
+sum(table(hits)==1)/nrow(res$tab)
+
+#or (model answer)
+mean(res$tab$L==1)
+```
+
+so the L column of the table is the number of CpGs in the region.
+
+```{r}
+hist(res$tab$L)
+```
 
 
 ### CpGIslandShores Assessment Q11
@@ -405,6 +420,8 @@ for(i in c(0,1,2,3)){
 What does this figure show?
 
  There is a positive correlation between gene expression and DNA methylation  
- There is a negative correlation between gene expression and DNA methylation and it is stronger for larger DMRs  
+ There is a negative correlation between gene expression and DNA methylation and it is stronger for larger DMRs  -- correct
  There is a netgative correlation between gene expression and DNA methylation and no relation ship to size of DMR  
  There is a no correlation between gene expression and DNA methylation
+ 
+The L column in tab gives the size of the DMR. tab$value gives the methylation value, while M gives the gene expression value. The plots, for L=1,2,3,4 are of gene expression value against methylayion value.

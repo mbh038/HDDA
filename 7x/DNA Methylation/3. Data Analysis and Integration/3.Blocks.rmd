@@ -19,7 +19,7 @@ We will search for differentially methylated blocks
 
 ```{r}
 library(minfi)
-path="mypath"
+path=mypath
 targets=read.delim(file.path (path,"targets.txt"),as.is=TRUE)
 index = which( targets$Tissue=="colon")
 targets = targets[index,]
@@ -31,7 +31,11 @@ dat = read.450k.exp(base=path,targets = targets, verbose=TRUE)
 ```{r}
 dat = preprocessIllumina(dat)
 dat = mapToGenome(dat)
+```
+
 Now we can collapse the data as described in the video:
+
+```{r}
 cdat = cpgCollapse(dat)
 ```
 
@@ -45,6 +49,11 @@ CpGs.
 How many regions are represented in the collapsed object?
 
 Hint: make sure to study the class of the cdat.
+
+```{r}
+class(cdat)
+nrow(cdat$obj)
+```
 
 
 ### Blocks Assessment Q2
@@ -60,10 +69,15 @@ Note that the type column has this information.
 
 What proportion of the regions are OpenSea regions?
 
+```{r}
+mean(granges(cdat$obj)$type=="OpenSea")
+#or (better)
+prop.table(table(mcols( granges(cdat$obj))$type))
+```
 
 ### Blocks Assessment Q3
 
-Now we use the blockFinder function to find differentially methylated regions between cancer and normal:
+Now we use the `blockFinder` function to find differentially methylated regions between cancer and normal:
 
 ```{r}
 status = factor(pData(cdat$obj)$Status,
@@ -72,10 +86,26 @@ X=model.matrix(~status)
 res = blockFinder(cdat$obj,X,cutoff=0.05)
 ```
 
-blockFinder calls bumphunter and returns a similar object. We can see the blocks:
+`blockFinder` calls `bumphunter` and returns a similar object. We can see the blocks:
 
 ```{r}
 head(res$table)
 ```
 
-What proportion of the blocks reported in res$table are hypomethyated (lower methylation in cancer versus normal)?dded to the code chunk to prevent printing of the R code that generated the plot.
+What proportion of the blocks reported in res$table are hypomethyated (lower methylation in cancer versus normal)
+
+```{r}
+mean(res$table$value<0)
+```
+
+Note that we can make figures in a simialar way:
+
+```{r}
+tab=makeGRangesFromDataFrame(res$table)
+index= granges(cdat$obj)%over% (tab[1]+10000)
+pos=start(cdat$obj)[index]
+col=as.numeric(status)
+matplot(pos,getBeta(cdat$obj)[index,],col=col,pch=1,cex=0.5)
+##and these are the estimated difference
+plot(pos,res$fitted[index])
+```

@@ -20,8 +20,8 @@ grset=getGenomicRatioSetFromGEO("GSE32148")
 ```
 
 ```{r}
-path="C:/Users/Mike/RSpace/PH525rawdata"
-#path="H:/RSpace/PH525rawdata/"
+# path="C:/Users/Mike/RSpace/PH525rawdata"
+path="H:/RSpace/PH525rawdata/"
 load(paste(path,"/grset.rda",sep=""))
 ```
 
@@ -77,9 +77,12 @@ grset2=grset[keep,]
 
 Use a multi-dimensional scaling (MDS) plot on the methylation measurements in grset2. Use color to denote individuals that are older than 40 and different symbols to denote the different conditions: normal, ulcerative, crohn.
 
+(see CpGIslandShores file on how to do this, also PH525.4x book chapter on MDS)
+
 ```{r}
-y = getBeta(grset2)
+y = getBeta(grset2) # gets the methylation values from grset2
 mds = cmdscale( dist( t(y)))
+library(rafalib)
 mypar(1,1)
 col=ifelse(age>40,1,2)
 plot(mds,pch=as.numeric(group),col=col)
@@ -90,5 +93,6 @@ How would you describe the MDS-plot?
 
  Samples cluster by condition, normals to the left and others to the right. 
  There is no obvious clustering.  
- The individuals that are older than 40 form a cluster, with the rest showing larger variability.  
+ The individuals that are older than 40 form a cluster, with the rest showing larger variability.  -- correct
  The samples cluster perfectly by age. 
+ 
