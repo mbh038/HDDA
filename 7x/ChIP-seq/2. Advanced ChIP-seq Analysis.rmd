@@ -1,0 +1,77 @@
+---
+title: "Advanced ChIP-seq Analysis"
+author: "Michael Hunt"
+date: "May 5, 2016"
+output: html_document
+---
+
+## CHIP-SEQ QC 2
+
+### Quality control II Q1
+
+Which of the following is true about evolutionary conservation of ChIP-seq peaks? Read the question and choose carefully, only one attempt allowed.
+
+ for a working ChIP-seq of a transcription factor, the overall peaks should have better evolutionary conservation than genome background 
+ 
+ all ChIP-seq peaks should be conserved over evolution  
+ 
+ ChIP-seq sites not conserved over evolution are not functional  
+
+Answer:  
+
+If the ChIP-seq experiment of a transcription factor (TF) worked, then it should capture all the binding sites of the TF in that cell condition. Because TF binding sites are under more evolutionary constraint, they will have overall better conservation than genome background. However, non-conserved sites might still be functional, and very often only a small portion of the total binding peaks have good evolutionary conservation.
+
+
+### Quality control II Q2
+
+
+Which of the following is NOT true about ChIP-seq QC? Read the question and choose carefully, only one attempt allowed.
+
+
+ for a working ChIP-seq, two biological replicates should have signal correlation > 0.95, similar to RNA-seq/transcriptome analysis. - correct 
+ 
+ for a working ChIP-seq of a transcription factor (TF), the TF's DNA binding motif should be enriched in center of the ChIP-seq peaks.  
+ 
+ for a working TF ChIP-seq, the TF's DNA binding motif should be more enriched in the stronger peaks than the weaker peaks.  
+ 
+ TF ChIP-seq often show signal enrichment at transcription start sites of genes.  
+
+Answer:  
+
+ChIP-seq data rarely has as good a inter-biological-replicate correlation as RNA-seq, since the protocol is pretty complex. Normally signal correlation > 0.6 and peak overlap over 60% are considered good replicate agreement. For transcription factor (TF) ChIP-seq, the correct TF motif should be enriched more in the stronger peaks, and more enriched in the peak center (summit). Even though only small % of all the TF binding sites are at the gene promoters, there is still an enrichment of overall ChIP-seq peak and signal enrichment near the transcription start sites of genes.
+
+## CHIP-SEQ TARGET GENES
+
+### Target gene Q1
+
+Which of the following is NOT true for finding the target gene of transcription factor binding sites. Two attempts allowed.
+
+binding sites only influence the expression of the nearest gene in mammalian system - correct  
+
+in mammalian system, a binding site after (3') the gene's transcription termination might still regulate the expression of the gene  
+
+a gene can be regulated by multiple nearby binding sites  
+
+one binding site can regulate multiple nearby genes   
+
+the potential of a binding site to loop to a gene's promoter follows exponential decay propotional to the distance.  
+
+Answer:  
+
+TF binding and target gene is a many-by-many relationship: one binding site can regulate the expression of multiple genes (stochastic so might be different in different cells) and one gene is regulated by mulitple nearby enhancers. In mammalian system, binding sites can appear in promoters, introns, distal locations either before or after the gene, and sometimes even a few genes away, and can still regulate a gene's expression level. This is often determined by how much a TF binding is looping (3D chromatin structure) is looping to the promoter of the gene, which often follows an exponential decay based on the distance between the binding site and the gene promoter.  
+
+### Target gene Q2
+
+In a simple scenario where a transcription factor (TF) can have on / off states, and in an experiment the TF is turned on and we measured the TF binding during the on state, as well as the RNA expression of both the on and off states. Which of the following is true about transcription factor? Read the question and choose carefully, only one attempt allowed.
+
+ if a gene's expression goes up when the TF becomes on, then the TF is a transcriptional activator  
+ 
+ if a gene's expression goes up when the TF becomes on and binds ~80KB upstream from the transcription start sites (TSS) of the gene, then the TF is a transcriptional activator  
+ 
+ the TF is a transcriptional activator if genes with better regulatory potential of the TF binding (i.e. more binding sites and binding closer to the TSS of the genes) are more activated in expression than random genome background - correct  
+ 
+ a TF is either a transcriptional activator or a transcriptional repressor
+ 
+Answer:  
+
+Whenever the cell is perturbed (e.g. turn on a TF), there are always genes showing either up or down expression, so one gene going up or down doesn't necessarily mean the TF is overall an activator or repressor, even if the TF has a binding site near the gene. A TF is an activator if overall genes with more and closer TF binding sites show significant more up-regulation of expression when the TF is on, and a TF can be both an activator or a repressor by interacting with different other TFs.
