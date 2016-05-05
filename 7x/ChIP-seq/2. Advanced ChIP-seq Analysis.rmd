@@ -75,3 +75,84 @@ In a simple scenario where a transcription factor (TF) can have on / off states,
 Answer:  
 
 Whenever the cell is perturbed (e.g. turn on a TF), there are always genes showing either up or down expression, so one gene going up or down doesn't necessarily mean the TF is overall an activator or repressor, even if the TF has a binding site near the gene. A TF is an activator if overall genes with more and closer TF binding sites show significant more up-regulation of expression when the TF is on, and a TF can be both an activator or a repressor by interacting with different other TFs.
+
+### Example Q1
+
+Which of the following is NOT true for estrogen receptor (ER) binding sites. Read the question and choose carefully, only one attempt allowed.
+
+ estrogen receptor ChIP-seq will pull down many FoxA1 binding sites  
+ 
+ 
+ the majority of the genome-wide estrogen receptor binding sites are conserved over vertebrate evolution - correct  
+ 
+ estrogen receptor can both activate and repress gene expression
+
+Answer: 
+
+ER interact with FoxA1, so ER ChIP-seq will also enrich FoxA1 binding sites. ER can activate and repress gene expression by interacting with different collaborating TFs. The majority of the ER sites are not conserved, as only 20% show reasonable conservation (phastcons > 0.2).
+
+## Cistrome
+
+[Cistrome](http://cistrome.org/Cistrome/Cistrome_Project.html)
+
+### Cistrome Q1
+
+The following is NOT true about Cistrome DB? One attempt allowed.
+
+ collects and processes public ChIP-seq and DNase-seq data in human and mouse 
+ 
+ can visualize the processed data in genome browsers  
+ 
+ can find similar datasets to a particular dataset in the DB  
+ 
+ can perform differential analysis of RNA-seq data - correct  
+ 
+
+### Cistrome Q2
+
+
+Which of the following are NOT used to quality control (QC) a processed ChIP-seq in Cistrome DB? One attempt allowed.
+
+ mappability of the reads  
+ low read redandency  
+ % of reads in peaks  
+ overlap with DNase-seq peaks  
+ overlap with genes - correct  
+ motif enrichment in peaks  
+ number of peaks with good fold enrichment  
+ sequence quality
+
+
+In Cistrome DB quality control, there are seven circles, and the above QC represent each of the seven, except the one about overlap with genes. In addition, cistrome provides the evolutionary conservation plot at the bottom, which is another good QC metric.
+
+## BETA
+
+### BETA Q1
+
+BETA uses which of the following pieces of information to predict direct target genes? Two attempts allowed.
+
+ ChIP-seq binding peaks (.bed files)  
+ Gene Expression Data  
+ Constitutive CTCF binding sites.  
+ Distance of binding site from transcription start site.  
+All of the above. - correct
+
+Answer:  
+
+BETA looks at ChIP-seq binding and based on their distance to transcription start site assigns regulatory potential. It can use constitutive CTCF binding sites to find insulators that block interaction between TF binding and a nearby gene. BETA also examines the expression (esp differential expression between factor on and factor off) data. Genes with high regulatory potential and high differential expression are called as direct targets.
+
+### BETA Q2
+
+Which variant of BETA would you use to find motifs in ChIP-seq peaks associated with upregulated genes? Two attemps allowed.
+
+ BETA basic  
+ BETA minus  
+ BETA plus 
+ BETA plus - correct  
+ BETA times  
+ BETA division
+EXPLANATION
+
+BETA plus: TF activating and repressive function prediction.
+
+
